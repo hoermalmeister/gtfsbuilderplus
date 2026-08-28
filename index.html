@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GTFS Data Builder</title>
+    <!-- MapLibre CSS -->
+    <link href="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.css" rel="stylesheet" />
+    <style>
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: sans-serif; }
+        #sidebar { width: 300px; padding: 20px; background: #f8f9fa; overflow-y: auto; border-right: 1px solid #ddd; }
+        #map { flex-grow: 1; }
+        .stop-item { padding: 10px; background: white; margin-bottom: 8px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+    <!-- Zde poběží Vue aplikace -->
+    <div id="app" style="display: contents;">
+        <div id="sidebar">
+            <h2>Zastávky ({{ store.stops.length }})</h2>
+            <p v-if="store.stops.length === 0" style="color: #666;">Kliknutím do mapy přidej první zastávku.</p>
+            
+            <!-- Reaktivní výpis zastávek ze stavu -->
+            <div v-for="stop in store.stops" :key="stop.id" class="stop-item">
+                <strong>{{ stop.name }}</strong><br>
+                <small>{{ stop.lat.toFixed(4) }}, {{ stop.lon.toFixed(4) }}</small>
+            </div>
+        </div>
+        <!-- Kontejner pro mapu -->
+        <div id="map"></div>
+    </div>
+
+    <!-- MapLibre JS (musí být načteno před naší aplikací) -->
+    <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
+    <!-- Naše aplikační logika jako ES modul -->
+    <script type="module" src="./app.js"></script>
+</body>
+</html>
