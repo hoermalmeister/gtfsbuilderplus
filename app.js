@@ -40,17 +40,24 @@ catch (e) { commonTimezones = ['Europe/Prague', 'UTC']; }
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 const store = reactive({
-    currentView: 'Lines',
-    menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Trips', 'Calendar', 'Shapes', 'Export'],
+    currentView: 'Feed info',
+    // Přeřazené menu
+    menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Trips', 'Shapes', 'Export'],
     
-    feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
+    // Doplněno o default_lang
+    feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', default_lang: '', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
     
     agencyMode: 'grid', selectedAgency: null, agencies: [],
     newAgency: { agency_name: '', dynamicFields: [] },
     
     stopMode: 'grid', selectedStop: null, stops: [], activeStop: null,
     
-    lineMode: 'grid', lines: [], activeLine: null, activeDirection: '0'
+    lineMode: 'grid', lines: [], activeLine: null, activeDirection: '0',
+
+    // CALENDAR (kalendář a výjimky)
+    calendarMode: 'grid', calendar: [], activeCalendar: null,
+    calendarDates: [],
+    newException: { service_id: '', date: '', exception_type: '1' }
 });
 
 const app = createApp({
@@ -108,6 +115,28 @@ const app = createApp({
                 const next = stopAttributes.find(attr => !used.includes(attr.key));
                 if (next) store.activeStop.dynamicFields.push({ key: next.key, value: '' });
             }
+        };
+
+        // --- CALENDAR LOGIC ---
+        const startCreateCalendar = () => {
+            store.activeCalendar = {
+                _internal_id: generateId(), service_id: 'SRV_' + generateId().toUpperCase(),
+                start_date: '', end_date: '',
+                monday: '1', tuesday: '1', wednesday: '1', thursday: '1', friday: '1', saturday: '0', sunday: '0'
+            };
+            store.calendarMode = 'create';
+        };
+        const openCalendar = (srv) => { store.activeCalendar = srv; store.calendarMode = 'details'; };
+        const saveCalendar = () => { if (store.calendarMode === 'create') store.calendar.push(store.activeCalendar); store.calendarMode = 'grid'; };
+        const deleteCalendar = () => { 
+            if(confirm('Delete this service?')) { 
+                store.calendar = store.calendar.filter(c => c._internal_id !== store.activeCalendar._internal_id); 
+                store.calendarMode = 'grid'; 
+            }
+        };
+        const addException = () => {
+            store.calendarDates.push({ ...store.newException });
+            store.newException.date = ''; // Reset jen u data, id a type zachováme pro rychlejší sypání
         };
 
         // --- STOP HELPERS ---
@@ -170,7 +199,6 @@ const app = createApp({
             }
         };
 
-        // Sledovač pro čistou re-inicializaci mapy
         watch(() => [store.currentView, store.lineMode, store.stopMode, store.activeDirection, store.activeLine?.patterns, store.stops], async () => {
             await nextTick();
             const inLines = store.currentView === 'Lines' && store.lineMode !== 'grid';
@@ -191,7 +219,8 @@ const app = createApp({
             coordInput, coordStopName, selectedExistingStop,
             openAgency, deleteSelectedAgency, startCreateAgency, getAvailableAttributes, triggerAgencyField, saveNewAgency, addCustomField,
             startCreateLine, openLine, saveLine, getAvailableLineAttributes, triggerLineField, getStopName, addExistingStopToPattern, addStopFromCoords,
-            startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField
+            startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField,
+            startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException
         };
     }
 });
