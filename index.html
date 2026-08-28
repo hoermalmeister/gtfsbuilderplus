@@ -196,6 +196,18 @@
                                 <input v-model="store.selectedAgency[attr.key]" :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
                             </div>
                         </div>
+                        
+                        <!-- Navrácený blok pro Custom Fields -->
+                        <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
+                        <div class="flex-between">
+                            <h3 style="margin: 0;">Custom Fields</h3>
+                            <button class="btn btn-outline" @click="addCustomField(store.selectedAgency.customFields)">+ Add Field</button>
+                        </div>
+                        <div v-for="(field, fIndex) in store.selectedAgency.customFields" :key="fIndex" class="custom-field-row">
+                            <input v-model="field.key" placeholder="Key" style="flex: 1;">
+                            <input v-model="field.value" placeholder="Value" style="flex: 2;">
+                            <button class="btn btn-danger" @click="store.selectedAgency.customFields.splice(fIndex, 1)">✕</button>
+                        </div>
                     </div>
                 </div>
             </div>
