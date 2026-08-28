@@ -1,6 +1,6 @@
 import { createApp, reactive, ref, nextTick, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
-// --- TŘÍDĚNÍ ATRIBUTŮ (Required první) ---
+// --- TŘÍDĚNÍ ATRIBUTŮ ---
 const sortAttrs = (arr) => arr.sort((a, b) => (a.required === b.required) ? 0 : a.required ? -1 : 1);
 
 const agencyAttributes = sortAttrs([
@@ -39,25 +39,24 @@ catch (e) { commonTimezones = ['Europe/Prague', 'UTC']; }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
+// --- HLAVNÍ STAV APLIKACE ---
 const store = reactive({
     currentView: 'Feed info',
-    // Přeřazené menu
     menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Trips', 'Shapes', 'Export'],
     
-    // Doplněno o default_lang
     feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', default_lang: '', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
     
-    agencyMode: 'grid', selectedAgency: null, agencies: [],
-    newAgency: { agency_name: '', dynamicFields: [] },
+    agencyMode: 'grid', selectedAgency: null, agencies: [], newAgency: { agency_name: '', dynamicFields: [] },
     
     stopMode: 'grid', selectedStop: null, stops: [], activeStop: null,
     
     lineMode: 'grid', lines: [], activeLine: null, activeDirection: '0',
 
-    // CALENDAR (kalendář a výjimky)
-    calendarMode: 'grid', calendar: [], activeCalendar: null,
-    calendarDates: [],
-    newException: { service_id: '', date: '', exception_type: '1' }
+    calendarMode: 'grid', calendar: [], activeCalendar: null, calendarDates: [],
+    newException: { service_id: '', date: '', exception_type: '1' },
+
+    trips: [], tripMode: 'grid', activeTripRoute: null,
+    tripGenConfig: { '0': { service_id: '', start_time: '' }, '1': { service_id: '', start_time: '' } }
 });
 
 const app = createApp({
@@ -101,7 +100,7 @@ const app = createApp({
             }
         };
 
-        // --- STOPS LOGIC ---
+        // --- STOPS ---
         const startCreateStop = () => {
             store.activeStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: '', stop_lat: '', stop_lon: '', dynamicFields: [] };
             store.stopMode = 'create';
@@ -116,30 +115,6 @@ const app = createApp({
                 if (next) store.activeStop.dynamicFields.push({ key: next.key, value: '' });
             }
         };
-
-        // --- CALENDAR LOGIC ---
-        const startCreateCalendar = () => {
-            store.activeCalendar = {
-                _internal_id: generateId(), service_id: 'SRV_' + generateId().toUpperCase(),
-                start_date: '', end_date: '',
-                monday: '1', tuesday: '1', wednesday: '1', thursday: '1', friday: '1', saturday: '0', sunday: '0'
-            };
-            store.calendarMode = 'create';
-        };
-        const openCalendar = (srv) => { store.activeCalendar = srv; store.calendarMode = 'details'; };
-        const saveCalendar = () => { if (store.calendarMode === 'create') store.calendar.push(store.activeCalendar); store.calendarMode = 'grid'; };
-        const deleteCalendar = () => { 
-            if(confirm('Delete this service?')) { 
-                store.calendar = store.calendar.filter(c => c._internal_id !== store.activeCalendar._internal_id); 
-                store.calendarMode = 'grid'; 
-            }
-        };
-        const addException = () => {
-            store.calendarDates.push({ ...store.newException });
-            store.newException.date = ''; // Reset jen u data, id a type zachováme pro rychlejší sypání
-        };
-
-        // --- STOP HELPERS ---
         const getStopName = (id) => { const s = store.stops.find(s => s.stop_id === id); return s ? s.stop_name : 'Unknown'; };
         const addExistingStopToPattern = () => {
             if (selectedExistingStop.value) { store.activeLine.patterns[store.activeDirection].push({ stop_id: selectedExistingStop.value, timeOffset: 2 }); selectedExistingStop.value = ''; }
@@ -159,12 +134,52 @@ const app = createApp({
             }
         };
 
+        // --- CALENDAR ---
+        const startCreateCalendar = () => {
+            store.activeCalendar = { _internal_id: generateId(), service_id: 'SRV_' + generateId().toUpperCase(), start_date: '', end_date: '', monday: '1', tuesday: '1', wednesday: '1', thursday: '1', friday: '1', saturday: '0', sunday: '0' };
+            store.calendarMode = 'create';
+        };
+        const openCalendar = (srv) => { store.activeCalendar = srv; store.calendarMode = 'details'; };
+        const saveCalendar = () => { if (store.calendarMode === 'create') store.calendar.push(store.activeCalendar); store.calendarMode = 'grid'; };
+        const deleteCalendar = () => { if(confirm('Delete?')) { store.calendar = store.calendar.filter(c => c._internal_id !== store.activeCalendar._internal_id); store.calendarMode = 'grid'; } };
+        const addException = () => { store.calendarDates.push({ ...store.newException }); store.newException.date = ''; };
+
+        // --- TRIPS ---
+        const openTripManager = (line) => { store.activeTripRoute = line; store.tripMode = 'details'; };
+        const getTripsForRouteAndDir = (dir) => {
+            if (!store.activeTripRoute) return [];
+            return store.trips.filter(t => t.route_id === store.activeTripRoute.route_id && t.direction_id === dir)
+                              .sort((a, b) => a.stop_times[0]?.departure_time.localeCompare(b.stop_times[0]?.departure_time));
+        };
+        const formatGtfsTime = (totalMinutes) => {
+            const h = Math.floor(totalMinutes / 60); const m = totalMinutes % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+        };
+        const generateTrip = (dir) => {
+            const config = store.tripGenConfig[dir];
+            const pattern = store.activeTripRoute.patterns[dir];
+            if (pattern.length === 0) { alert('No stops in Journey Pattern.'); return; }
+
+            const [hh, mm] = config.start_time.split(':').map(Number);
+            let currentMinutes = (hh * 60) + mm;
+            const stopTimes = [];
+
+            pattern.forEach((pStop, idx) => {
+                const timeStr = formatGtfsTime(currentMinutes);
+                stopTimes.push({ stop_id: pStop.stop_id, stop_sequence: idx + 1, arrival_time: timeStr, departure_time: timeStr });
+                currentMinutes += (pStop.timeOffset || 0);
+            });
+
+            store.trips.push({ _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: config.service_id, direction_id: dir, stop_times: stopTimes, _expanded: false });
+            config.start_time = ''; 
+        };
+        const deleteTrip = (internalId) => { if(confirm('Delete trip?')) store.trips = store.trips.filter(t => t._internal_id !== internalId); };
+
         // --- MAP LOGIC ---
         const initMap = (containerId) => {
             map = new maplibregl.Map({ container: containerId, style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', center: [15.6792, 48.5448], zoom: 12 });
             map.on('click', (e) => {
                 const lat = e.lngLat.lat.toFixed(7); const lon = e.lngLat.lng.toFixed(7);
-                
                 if (store.currentView === 'Lines' && store.lineMode !== 'grid') {
                     const newStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: `Stop ${lat.substring(0,5)}`, stop_lat: lat, stop_lon: lon, dynamicFields: [] };
                     store.stops.push(newStop);
@@ -220,7 +235,8 @@ const app = createApp({
             openAgency, deleteSelectedAgency, startCreateAgency, getAvailableAttributes, triggerAgencyField, saveNewAgency, addCustomField,
             startCreateLine, openLine, saveLine, getAvailableLineAttributes, triggerLineField, getStopName, addExistingStopToPattern, addStopFromCoords,
             startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField,
-            startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException
+            startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
+            openTripManager, getTripsForRouteAndDir, generateTrip, deleteTrip
         };
     }
 });
