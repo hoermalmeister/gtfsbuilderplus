@@ -536,6 +536,78 @@
             <!-- TRANSFERS VIEW -->
             <div class="view-container-full" v-show="store.currentView === 'Transfers'">
                 <h1>Transfers</h1>
+                
+                <!-- Add New Transfer Panel -->
+                <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe; margin-bottom: 24px;">
+                    <h3 style="margin-top: 0; color: #1e3a8a;">Add New Transfer</h3>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label>From Route</label>
+                            <select v-model="store.newTransfer.from_route_id" @change="store.newTransfer.from_trip_id=''; store.newTransfer.from_stop_id=''">
+                                <option value="">- Select Route -</option>
+                                <option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>From Trip</label>
+                            <select v-model="store.newTransfer.from_trip_id" @change="store.newTransfer.from_stop_id=''">
+                                <option value="">- Select Trip -</option>
+                                <option v-for="t in getTripsForRoute(store.newTransfer.from_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>From Stop</label>
+                            <select v-model="store.newTransfer.from_stop_id">
+                                <option value="">- Select Stop -</option>
+                                <option v-for="st in getStopsForTrip(store.newTransfer.from_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1.5fr 0.5fr 1fr; gap: 12px; align-items: end;">
+                        <div class="form-group">
+                            <label>To Route</label>
+                            <select v-model="store.newTransfer.to_route_id" @change="store.newTransfer.to_trip_id=''; store.newTransfer.to_stop_id=''">
+                                <option value="">- Select Route -</option>
+                                <option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>To Trip</label>
+                            <select v-model="store.newTransfer.to_trip_id" @change="store.newTransfer.to_stop_id=''">
+                                <option value="">- Select Trip -</option>
+                                <option v-for="t in getTripsForRoute(store.newTransfer.to_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>To Stop</label>
+                            <select v-model="store.newTransfer.to_stop_id">
+                                <option value="">- Select Stop -</option>
+                                <option v-for="st in getStopsForTrip(store.newTransfer.to_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Type</label>
+                            <select v-model="store.newTransfer.transfer_type">
+                                <option value="0">0 - Recommended hub</option>
+                                <option value="1">1 - Waiting transfer</option>
+                                <option value="2">2 - Requires min time</option>
+                                <option value="3">3 - Explicitly not possible</option>
+                                <option value="4">4 - In-seat transfer</option>
+                                <option value="5">5 - Re-board same vehicle</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Min Time</label>
+                            <input v-model="store.newTransfer.min_transfer_time" placeholder="Secs" type="number" min="0">
+                        </div>
+                        <div class="form-group">
+                            <button class="btn" style="width: 100%;" @click="addTransfer" :disabled="!store.newTransfer.from_stop_id || !store.newTransfer.to_stop_id">+ Add Transfer</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Transfers List -->
                 <div class="card" style="overflow-x: auto; padding: 0;">
                     <table class="transfers-table">
                         <thead>
@@ -547,34 +619,23 @@
                         </thead>
                         <tbody>
                             <tr v-for="(tr, idx) in store.transfers" :key="idx">
-                                <td>{{ tr.from_route_id }}</td><td>{{ tr.from_trip_id }}</td><td>{{ tr.from_stop_id }}</td>
-                                <td>{{ tr.to_route_id }}</td><td>{{ tr.to_trip_id }}</td><td>{{ tr.to_stop_id }}</td>
-                                <td>{{ tr.transfer_type }}</td><td>{{ tr.min_transfer_time }}</td>
+                                <td>{{ tr.from_route_id }}</td><td>{{ tr.from_trip_id }}</td><td>{{ getStopName(tr.from_stop_id) }}</td>
+                                <td>{{ tr.to_route_id }}</td><td>{{ tr.to_trip_id }}</td><td>{{ getStopName(tr.to_stop_id) }}</td>
+                                <td>
+                                    <span v-if="tr.transfer_type === '0'">0 - Recommended hub</span>
+                                    <span v-else-if="tr.transfer_type === '1'">1 - Waiting transfer</span>
+                                    <span v-else-if="tr.transfer_type === '2'">2 - Requires min time</span>
+                                    <span v-else-if="tr.transfer_type === '3'">3 - Explicitly not possible</span>
+                                    <span v-else-if="tr.transfer_type === '4'">4 - In-seat transfer</span>
+                                    <span v-else-if="tr.transfer_type === '5'">5 - Re-board same vehicle</span>
+                                    <span v-else>{{ tr.transfer_type }}</span>
+                                </td>
+                                <td>{{ tr.min_transfer_time }}</td>
                                 <td><button class="btn btn-danger" style="padding: 4px 8px;" @click="store.transfers.splice(idx, 1)">✕</button></td>
-                            </tr>
-                            <tr style="background: #f8fafc;">
-                                <td><select v-model="store.newTransfer.from_route_id" @change="store.newTransfer.from_trip_id=''; store.newTransfer.from_stop_id=''"><option value="">- Route -</option><option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option></select></td>
-                                <td>
-                                    <select v-model="store.newTransfer.from_trip_id" @change="store.newTransfer.from_stop_id=''">
-                                        <option value="">- Trip -</option>
-                                        <option v-for="t in getTripsForRoute(store.newTransfer.from_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
-                                    </select>
-                                </td>
-                                <td><select v-model="store.newTransfer.from_stop_id"><option value="">- Stop -</option><option v-for="st in getStopsForTrip(store.newTransfer.from_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option></select></td>
-                                <td><select v-model="store.newTransfer.to_route_id" @change="store.newTransfer.to_trip_id=''; store.newTransfer.to_stop_id=''"><option value="">- Route -</option><option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option></select></td>
-                                <td>
-                                    <select v-model="store.newTransfer.to_trip_id" @change="store.newTransfer.to_stop_id=''">
-                                        <option value="">- Trip -</option>
-                                        <option v-for="t in getTripsForRoute(store.newTransfer.to_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
-                                    </select>
-                                </td>
-                                <td><select v-model="store.newTransfer.to_stop_id"><option value="">- Stop -</option><option v-for="st in getStopsForTrip(store.newTransfer.to_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option></select></td>
-                                <td><select v-model="store.newTransfer.transfer_type"><option value="0">0 - Recommended</option><option value="1">1 - Timed</option><option value="2">2 - Min Time</option><option value="3">3 - Not Possible</option></select></td>
-                                <td><input v-model="store.newTransfer.min_transfer_time" placeholder="Secs"></td>
-                                <td><button class="btn" style="padding: 6px 10px;" @click="addTransfer">+</button></td>
                             </tr>
                         </tbody>
                     </table>
+                    <div v-if="store.transfers.length === 0" style="padding: 24px; text-align: center; color: #64748b;">No transfers defined.</div>
                 </div>
             </div>
 
