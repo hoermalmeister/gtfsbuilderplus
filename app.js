@@ -1,7 +1,15 @@
 import { createApp, reactive, ref, onMounted, watch, nextTick } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
 // --- GTFS SPECIFIKACE ---
-const agencyAttributes = [/* tvé atributy z minula... */];
+const agencyAttributes = [
+    { key: 'agency_url', required: true },
+    { key: 'agency_timezone', required: true },
+    { key: 'agency_lang', required: false },
+    { key: 'agency_phone', required: false },
+    { key: 'agency_fare_url', required: false },
+    { key: 'agency_email', required: false },
+    { key: 'cemv_support', required: false }
+];
 
 const routeAttributes = [
     { key: 'route_long_name', required: false },
