@@ -1,69 +1,62 @@
-// Načtení Vue přímo z CDN
-import { createApp, reactive, onMounted, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { createApp, reactive } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
-// 1. Globální stav (nahrazuje Pinia z předchozího příkladu)
+// Reaktivní stav celé aplikace
 const store = reactive({
-    stops: [],
-    addStop(lat, lon) {
-        const newId = `stop_${this.stops.length + 1}`;
-        this.stops.push({
-            id: newId,
-            name: `Zastávka ${this.stops.length + 1}`,
-            lat: lat,
-            lon: lon
-        });
-    }
+    // Výchozí obrazovka
+    currentView: 'Feed info',
+    menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Shapes', 'Export'],
+    
+    // Data pro feed_info.txt
+    feedInfo: {
+        feed_publisher_name: '',
+        feed_publisher_url: '',
+        feed_lang: 'en',
+        feed_start_date: '',
+        feed_end_date: '',
+        feed_version: '',
+        feed_contact_email: '',
+        feed_contact_url: '',
+        customFields: [] // formát: { key: '...', value: '...' }
+    },
+
+    // Data pro agency.txt
+    agencies: [
+        {
+            _internal_id: crypto.randomUUID(), // Unikátní ID pro Vue iteraci
+            agency_id: '',
+            agency_name: '',
+            agency_url: '',
+            agency_timezone: '',
+            customFields: []
+        }
+    ]
 });
 
-// 2. Hlavní Vue aplikace
 const app = createApp({
     setup() {
-        let map = null;
-        let markers = [];
+        // Funkce pro přidání vlastního pole do libovolného pole (feedInfo nebo specific agency)
+        const addCustomField = (targetArray) => {
+            targetArray.push({ key: '', value: '' });
+        };
 
-        onMounted(() => {
-            // Inicializace mapy (open-source podklad)
-            map = new maplibregl.Map({
-                container: 'map',
-                style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-                center: [14.42, 50.08], // Praha
-                zoom: 11
+        // Funkce pro přidání nového provozovatele
+        const addAgency = () => {
+            store.agencies.push({
+                _internal_id: crypto.randomUUID(),
+                agency_id: '',
+                agency_name: '',
+                agency_url: '',
+                agency_timezone: '',
+                customFields: []
             });
+        };
 
-            // Kliknutí do mapy zavolá naši funkci ve store
-            map.on('click', (e) => {
-                store.addStop(e.lngLat.lat, e.lngLat.lng);
-            });
-        });
-
-        // 3. Sledování změn: Když se změní zastávky, překresli markery v mapě
-        watch(() => store.stops, (newStops) => {
-            // Smažeme staré markery
-            markers.forEach(m => m.remove());
-            markers = [];
-
-            // Vytvoříme nové podle aktuálních dat
-            newStops.forEach(stop => {
-                const el = document.createElement('div');
-                el.style.backgroundColor = '#e74c3c';
-                el.style.width = '12px';
-                el.style.height = '12px';
-                el.style.borderRadius = '50%';
-                el.style.border = '2px solid white';
-                el.style.cursor = 'pointer';
-
-                const marker = new maplibregl.Marker({ element: el })
-                    .setLngLat([stop.lon, stop.lat])
-                    .addTo(map);
-                
-                markers.push(marker);
-            });
-        }, { deep: true });
-
-        // Vystavíme store do HTML šablony
-        return { store };
+        return { 
+            store, 
+            addCustomField, 
+            addAgency 
+        };
     }
 });
 
-// Spuštění aplikace
 app.mount('#app');
