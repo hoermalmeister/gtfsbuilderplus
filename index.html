@@ -88,7 +88,7 @@
         <nav id="sidebar">
             <div class="brand">GTFS Builder</div>
             <div class="nav-items">
-                <button v-for="item in store.menuItems" :key="item" class="nav-btn" :class="{ active: store.currentView === item }" @click="store.currentView = item">
+                <button v-for="item in menuItems" :key="item" class="nav-btn" :class="{ active: store.currentView === item }" @click="store.currentView = item">
                     {{ item }}
                 </button>
             </div>
@@ -96,6 +96,23 @@
 
         <main id="content">
             
+            <!-- IMPORT VIEW -->
+            <div class="view-container" v-show="store.currentView === 'Import'">
+                <h1>Import GTFS Zip</h1>
+                <div class="card" style="text-align: center; padding: 40px 24px;">
+                    <h2 style="margin-top: 0;">Upload Existing Feed</h2>
+                    <p style="color: #64748b; margin-bottom: 32px;">Upload a standard <code>gtfs.zip</code> to populate all tables and visualizers. Any extra text files will be loaded into dynamic editable tables.</p>
+                    
+                    <input type="file" id="gtfs-upload" accept=".zip" style="display: none;" @change="handleImportZip">
+                    <label for="gtfs-upload" class="btn" style="font-size: 1.2rem; padding: 16px 32px; display: inline-block; cursor: pointer;">
+                        {{ store.isImporting ? 'Processing ZIP...' : '📁 Select gtfs.zip' }}
+                    </label>
+                    <div v-if="store.importMessage" style="margin-top: 24px; padding: 12px; border-radius: 8px; background: #eff6ff; color: #1e3a8a;">
+                        {{ store.importMessage }}
+                    </div>
+                </div>
+            </div>
+
             <!-- FEED INFO VIEW -->
             <div class="view-container" v-show="store.currentView === 'Feed info'">
                 <h1>Feed Information</h1>
@@ -190,7 +207,7 @@
                     <div class="agencies-grid">
                         <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openLine(line)">
                             <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
-                            <p>{{ line.route_long_name || 'No long name' }}</p>
+                            <p>{{ line.dynamicFields.find(f => f.key === 'route_long_name')?.value || 'No long name' }}</p>
                         </div>
                         <div class="agency-card add-card" @click="startCreateLine">+ Create Line</div>
                     </div>
@@ -225,8 +242,8 @@
 
                         <h2>Journey Pattern</h2>
                         <div class="direction-toggle">
-                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
-                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound</div>
                         </div>
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
@@ -385,7 +402,7 @@
                     <div class="agencies-grid">
                         <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openTripManager(line)">
                             <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
-                            <p>{{ line.route_long_name || 'Manage Trips' }}</p>
+                            <p>{{ line.dynamicFields.find(f => f.key === 'route_long_name')?.value || 'Manage Trips' }}</p>
                         </div>
                     </div>
                 </div>
@@ -397,7 +414,7 @@
                     </div>
 
                     <div class="split-left" style="padding-top: 100px;">
-                        <h3>Outbound (Tam) - Dir 0</h3>
+                        <h3>Outbound - Dir 0</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
                                 <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['0'].mode" value="single"> Single</label>
@@ -423,7 +440,7 @@
                     </div>
 
                     <div class="split-right" style="padding-top: 100px; background: #f8fafc;">
-                        <h3>Inbound (Zpět) - Dir 1</h3>
+                        <h3>Inbound - Dir 1</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
                                 <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['1'].mode" value="single"> Single</label>
@@ -537,10 +554,20 @@
                             </tr>
                             <tr style="background: #f8fafc;">
                                 <td><select v-model="store.newTransfer.from_route_id" @change="store.newTransfer.from_trip_id=''; store.newTransfer.from_stop_id=''"><option value="">- Route -</option><option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option></select></td>
-                                <td><select v-model="store.newTransfer.from_trip_id" @change="store.newTransfer.from_stop_id=''"><option value="">- Trip -</option><option v-for="t in getTripsForRoute(store.newTransfer.from_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}}</option></select></td>
+                                <td>
+                                    <select v-model="store.newTransfer.from_trip_id" @change="store.newTransfer.from_stop_id=''">
+                                        <option value="">- Trip -</option>
+                                        <option v-for="t in getTripsForRoute(store.newTransfer.from_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
+                                    </select>
+                                </td>
                                 <td><select v-model="store.newTransfer.from_stop_id"><option value="">- Stop -</option><option v-for="st in getStopsForTrip(store.newTransfer.from_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option></select></td>
                                 <td><select v-model="store.newTransfer.to_route_id" @change="store.newTransfer.to_trip_id=''; store.newTransfer.to_stop_id=''"><option value="">- Route -</option><option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option></select></td>
-                                <td><select v-model="store.newTransfer.to_trip_id" @change="store.newTransfer.to_stop_id=''"><option value="">- Trip -</option><option v-for="t in getTripsForRoute(store.newTransfer.to_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}}</option></select></td>
+                                <td>
+                                    <select v-model="store.newTransfer.to_trip_id" @change="store.newTransfer.to_stop_id=''">
+                                        <option value="">- Trip -</option>
+                                        <option v-for="t in getTripsForRoute(store.newTransfer.to_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}} ({{t.stop_times[0]?.departure_time}})</option>
+                                    </select>
+                                </td>
                                 <td><select v-model="store.newTransfer.to_stop_id"><option value="">- Stop -</option><option v-for="st in getStopsForTrip(store.newTransfer.to_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option></select></td>
                                 <td><select v-model="store.newTransfer.transfer_type"><option value="0">0 - Recommended</option><option value="1">1 - Timed</option><option value="2">2 - Min Time</option><option value="3">3 - Not Possible</option></select></td>
                                 <td><input v-model="store.newTransfer.min_transfer_time" placeholder="Secs"></td>
@@ -594,6 +621,32 @@
                 </div>
             </div>
 
+            <!-- EXTRA DYNAMIC FILES VIEWS -->
+            <div v-for="file in store.extraFiles" :key="file.name" v-show="store.currentView === file.name" class="view-container-full">
+                <div class="flex-between">
+                    <h1>{{ file.name }}</h1>
+                    <button class="btn" @click="file.rows.push({})">+ Add Row</button>
+                </div>
+                <div class="card" style="overflow-x: auto; padding: 0;">
+                    <table class="transfers-table">
+                        <thead>
+                            <tr>
+                                <th v-for="(h, hIdx) in file.headers" :key="hIdx">
+                                    <input v-model="file.headers[hIdx]" style="background: transparent; color: white; border: none; font-weight: bold;">
+                                </th>
+                                <th><button class="btn btn-outline" style="color: white; border-color: white; padding: 4px 8px;" @click="file.headers.push('new_column')">+ Col</button></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(row, rIdx) in file.rows" :key="rIdx">
+                                <td v-for="h in file.headers" :key="h"><input v-model="row[h]"></td>
+                                <td><button class="btn btn-danger" @click="file.rows.splice(rIdx, 1)">✕</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- EXPORT VIEW -->
             <div class="view-container" v-show="store.currentView === 'Export'">
                 <h1>Export GTFS Data</h1>
@@ -623,11 +676,6 @@
                 </div>
             </div>
 
-            <!-- IMPORT VIEW -->
-            <div class="view-container" v-show="store.currentView === 'Import'">
-                <h1>Import</h1>
-                <p>This section is under construction.</p>
-            </div>
         </main>
     </div>
     
