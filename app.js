@@ -68,7 +68,7 @@ const store = reactive({
     newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' },
 
     shapes: [], shapesSummary: [], brouterLoading: false,
-    brouterConfig: { line_id: '', direction: '0', profile: 'car-test' }
+    shapeGenConfig: { route_id: '', profile: 'car-test' }
 });
 
 const app = createApp({
@@ -226,32 +226,87 @@ const app = createApp({
         };
         const addTransfer = () => { store.transfers.push({ ...store.newTransfer }); store.newTransfer = { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' }; };
 
-        const generateShapeFromBRouter = async () => {
-            const lineId = store.brouterConfig.line_id; const dir = store.brouterConfig.direction; const profile = store.brouterConfig.profile;
-            const line = store.lines.find(l => l._internal_id === lineId);
-            if (!line || line.patterns[dir].length < 2) { alert('Line has less than 2 stops in this direction.'); return; }
+        // --- SHAPES GENERATION (BRouter) ---
+        const generateShapesForRoute = async () => {
+            const routeId = store.shapeGenConfig.route_id;
+            const profile = store.shapeGenConfig.profile;
+            const routeTrips = store.trips.filter(t => t.route_id === routeId);
+            
+            if (routeTrips.length === 0) { alert('No trips found for this route.'); return; }
             store.brouterLoading = true;
-            const coordsStr = line.patterns[dir].map(pStop => {
-                const s = store.stops.find(st => st.stop_id === pStop.stop_id);
-                return s ? `${s.stop_lon},${s.stop_lat}` : null;
-            }).filter(c => c !== null).join('|');
-            try {
-                const url = `https://brouter.de/brouter?lonlats=${coordsStr}&profile=${profile}&alternativeidx=0&format=geojson`;
-                const res = await fetch(url);
-                if (!res.ok) throw new Error('BRouter request failed.');
-                const geojson = await res.json();
-                if (geojson.features && geojson.features.length > 0) {
-                    const coords = geojson.features[0].geometry.coordinates;
-                    const shapeId = `SHP_${line.route_short_name}_${dir}_${generateId().toUpperCase()}`;
-                    coords.forEach((c, idx) => { store.shapes.push({ shape_id: shapeId, shape_pt_lat: c[1].toFixed(7), shape_pt_lon: c[0].toFixed(7), shape_pt_sequence: idx + 1 }); });
-                    store.shapesSummary.push({ shape_id: shapeId, points_count: coords.length });
-                    alert(`Shape ${shapeId} generated!`);
+            
+            // 1. Group trips by unique stop sequence
+            const groups = {};
+            routeTrips.forEach(trip => {
+                const seqKey = trip.stop_times.map(st => st.stop_id).join('|');
+                if (!groups[seqKey]) groups[seqKey] = { stop_ids: trip.stop_times.map(st => st.stop_id), trips: [] };
+                groups[seqKey].trips.push(trip);
+            });
+            
+            for (const seqKey of Object.keys(groups)) {
+                const group = groups[seqKey];
+                if (group.stop_ids.length < 2) continue;
+                
+                const coordsStr = group.stop_ids.map(stopId => {
+                    const s = store.stops.find(st => st.stop_id === stopId);
+                    return s ? `${s.stop_lon},${s.stop_lat}` : null;
+                }).filter(c => c !== null).join('|');
+                
+                const shapeId = `SHP_${routeId}_${generateId().toUpperCase()}`;
+                let finalCoords = [];
+                
+                if (profile === 'straight') {
+                    finalCoords = group.stop_ids.map(stopId => {
+                        const s = store.stops.find(st => st.stop_id === stopId);
+                        return s ? [parseFloat(s.stop_lon), parseFloat(s.stop_lat)] : null;
+                    }).filter(c => c !== null);
+                } else {
+                    try {
+                        const url = `https://brouter.de/brouter?lonlats=${coordsStr}&profile=${profile}&alternativeidx=0&format=geojson`;
+                        const res = await fetch(url);
+                        if (!res.ok) throw new Error('BRouter failed');
+                        const geojson = await res.json();
+                        if (geojson.features && geojson.features.length > 0) {
+                            finalCoords = geojson.features[0].geometry.coordinates;
+                        }
+                    } catch (e) {
+                        console.error('Routing failed', e);
+                        // Fallback to straight lines
+                        finalCoords = group.stop_ids.map(stopId => {
+                            const s = store.stops.find(st => st.stop_id === stopId);
+                            return s ? [parseFloat(s.stop_lon), parseFloat(s.stop_lat)] : null;
+                        }).filter(c => c !== null);
+                    }
                 }
-            } catch (e) { alert('Routing failed. Check if endpoints are routable in BRouter or try different profile.'); } 
-            finally { store.brouterLoading = false; }
+                
+                if (finalCoords.length > 0) {
+                    finalCoords.forEach((c, idx) => { store.shapes.push({ shape_id: shapeId, shape_pt_lat: c[1].toFixed(7), shape_pt_lon: c[0].toFixed(7), shape_pt_sequence: idx + 1 }); });
+                    store.shapesSummary.push({ shape_id: shapeId, route_id: routeId, points_count: finalCoords.length, trips_count: group.trips.length });
+                    
+                    group.trips.forEach(trip => {
+                        let sf = trip.dynamicFields.find(f => f.key === 'shape_id');
+                        if (!sf) trip.dynamicFields.push({ key: 'shape_id', value: shapeId });
+                        else sf.value = shapeId;
+                    });
+                }
+            }
+            store.brouterLoading = false;
+            updateMapData(); // Refresh Map with new lines
         };
-        const deleteShape = (shapeId) => { if(confirm(`Delete Shape ${shapeId}?`)) { store.shapes = store.shapes.filter(s => s.shape_id !== shapeId); store.shapesSummary = store.shapesSummary.filter(s => s.shape_id !== shapeId); } };
 
+        const deleteShape = (shapeId) => {
+            if(confirm(`Delete Shape ${shapeId}?`)) {
+                store.shapes = store.shapes.filter(s => s.shape_id !== shapeId);
+                store.shapesSummary = store.shapesSummary.filter(s => s.shape_id !== shapeId);
+                // Odebrání attributu z trips
+                store.trips.forEach(t => {
+                    t.dynamicFields = t.dynamicFields.filter(f => !(f.key === 'shape_id' && f.value === shapeId));
+                });
+                updateMapData();
+            }
+        };
+
+        // --- MAP LOGIC ---
         const initMap = (containerId) => {
             map = new maplibregl.Map({ container: containerId, style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', center: [15.6792, 48.5448], zoom: 12 });
             map.on('click', (e) => {
@@ -267,6 +322,7 @@ const app = createApp({
                 }
             });
         };
+
         const drawMarkers = () => {
             if (!map) return;
             markers.forEach(m => m.remove()); markers = [];
@@ -297,16 +353,63 @@ const app = createApp({
             }
         };
 
+        const drawShapesOnMap = () => {
+            if (!map || store.currentView !== 'Shapes') return;
+            
+            // Vyčistí staré Shapes Layers
+            const style = map.getStyle();
+            if (style && style.layers) style.layers.forEach(l => { if (l.id.startsWith('shp-layer-')) map.removeLayer(l.id); });
+            if (style && style.sources) Object.keys(style.sources).forEach(s => { if (s.startsWith('shp-src-')) map.removeSource(s); });
+
+            const bounds = new maplibregl.LngLatBounds();
+            let hasPoints = false;
+
+            store.shapesSummary.forEach(shpSum => {
+                const shapePoints = store.shapes.filter(s => s.shape_id === shpSum.shape_id).sort((a,b) => a.shape_pt_sequence - b.shape_pt_sequence);
+                if (shapePoints.length < 2) return;
+
+                const coordinates = shapePoints.map(sp => [parseFloat(sp.shape_pt_lon), parseFloat(sp.shape_pt_lat)]);
+                coordinates.forEach(c => bounds.extend(c));
+                hasPoints = true;
+
+                // Najde barvu linky
+                const route = store.lines.find(r => r.route_id === shpSum.route_id);
+                let color = '#2563eb';
+                if (route) {
+                    const colorField = route.dynamicFields.find(f => f.key === 'route_color');
+                    if (colorField && colorField.value) color = colorField.value.startsWith('#') ? colorField.value : `#${colorField.value}`;
+                }
+
+                map.addSource(`shp-src-${shpSum.shape_id}`, { 'type': 'geojson', 'data': { 'type': 'Feature', 'properties': {}, 'geometry': { 'type': 'LineString', 'coordinates': coordinates } } });
+                map.addLayer({ 'id': `shp-layer-${shpSum.shape_id}`, 'type': 'line', 'source': `shp-src-${shpSum.shape_id}`, 'layout': { 'line-join': 'round', 'line-cap': 'round' }, 'paint': { 'line-color': color, 'line-width': 4 } });
+            });
+
+            if (hasPoints) map.fitBounds(bounds, { padding: 50 });
+        };
+
+        const updateMapData = () => {
+            if (!map) return;
+            if (!map.isStyleLoaded()) {
+                map.once('load', () => { drawMarkers(); drawShapesOnMap(); });
+            } else {
+                drawMarkers(); drawShapesOnMap();
+            }
+        };
+
         watch(() => [store.currentView, store.lineMode, store.stopMode, store.activeDirection, store.activeLine?.patterns, store.stops, store.activeStop?.stop_lat], async () => {
             await nextTick();
             const inLines = store.currentView === 'Lines' && store.lineMode !== 'grid';
             const inStops = store.currentView === 'Stops';
-            if (inLines || inStops) {
-                const containerId = inLines ? 'map-container-lines' : 'map-container-stops';
+            const inShapes = store.currentView === 'Shapes';
+            
+            if (inLines || inStops || inShapes) {
+                const containerId = inLines ? 'map-container-lines' : (inStops ? 'map-container-stops' : 'map-container-shapes');
                 if (map && map.getContainer().id !== containerId) { map.remove(); map = null; }
                 if (!map) initMap(containerId); else map.resize();
-                drawMarkers();
-            } else { if (map) { map.remove(); map = null; } }
+                updateMapData();
+            } else {
+                if (map) { map.remove(); map = null; }
+            }
         }, { deep: true });
 
         return {
@@ -317,7 +420,7 @@ const app = createApp({
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
             openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, 
             openTripEdit, saveTripEdit, deleteTrip, getAvailableTripAttributes, triggerTripField, moveStopTime, addStopToTrip,
-            getTripsForRoute, getStopsForTrip, addTransfer, generateShapeFromBRouter, deleteShape
+            getTripsForRoute, getStopsForTrip, addTransfer, generateShapesForRoute, deleteShape
         };
     }
 });
