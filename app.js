@@ -350,8 +350,19 @@ const app = createApp({
                 }
 
                 if (parsedData['agency.txt']) {
-                    const knownAgy = ['agency_id', 'agency_name'];
-                    store.agencies = parsedData['agency.txt'].map(row => ({ _internal_id: generateId(), agency_id: row.agency_id || '', agency_name: row.agency_name || '', dynamicFields: extractDynamic(row, knownAgy) }));
+                    const knownAgy = ['agency_id', 'agency_name', ...agencyAttributes.map(a => a.key)];
+                    store.agencies = parsedData['agency.txt'].map(row => {
+                        const agyObj = {
+                            _internal_id: generateId(),
+                            agency_id: row.agency_id || '', 
+                            agency_name: row.agency_name || '',
+                            customFields: extractDynamic(row, knownAgy)
+                        };
+                        agencyAttributes.forEach(attr => {
+                            agyObj[attr.key] = row[attr.key] || '';
+                        });
+                        return agyObj;
+                    });
                 }
 
                 if (parsedData['stops.txt']) {
