@@ -135,6 +135,7 @@ const app = createApp({
                 let lat = parseFloat(match[1]); let lon = parseFloat(match[2]);
                 if (coordInput.value.toUpperCase().includes('S') && lat > 0) lat = -lat;
                 if (coordInput.value.toUpperCase().includes('W') && lon > 0) lon = -lon;
+                
                 const finalName = coordStopName.value.trim() || `Stop ${lat.toFixed(5)}`;
                 const newStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: finalName, stop_lat: lat.toFixed(7), stop_lon: lon.toFixed(7), dynamicFields: [] };
                 store.stops.push(newStop);
@@ -227,6 +228,15 @@ const app = createApp({
         const addTransfer = () => { store.transfers.push({ ...store.newTransfer }); store.newTransfer = { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' }; };
 
         // --- SHAPES GENERATION (BRouter) ---
+        const isRouteShapesComplete = (routeId) => {
+            const routeTrips = store.trips.filter(t => t.route_id === routeId);
+            if (routeTrips.length === 0) return false;
+            return routeTrips.every(t => {
+                const sf = t.dynamicFields.find(f => f.key === 'shape_id');
+                return sf && sf.value && sf.value.trim() !== '';
+            });
+        };
+
         const generateShapesForRoute = async () => {
             const routeId = store.shapeGenConfig.route_id;
             const profile = store.shapeGenConfig.profile;
@@ -235,7 +245,6 @@ const app = createApp({
             if (routeTrips.length === 0) { alert('No trips found for this route.'); return; }
             store.brouterLoading = true;
             
-            // 1. Group trips by unique stop sequence
             const groups = {};
             routeTrips.forEach(trip => {
                 const seqKey = trip.stop_times.map(st => st.stop_id).join('|');
@@ -271,7 +280,6 @@ const app = createApp({
                         }
                     } catch (e) {
                         console.error('Routing failed', e);
-                        // Fallback to straight lines
                         finalCoords = group.stop_ids.map(stopId => {
                             const s = store.stops.find(st => st.stop_id === stopId);
                             return s ? [parseFloat(s.stop_lon), parseFloat(s.stop_lat)] : null;
@@ -291,14 +299,13 @@ const app = createApp({
                 }
             }
             store.brouterLoading = false;
-            updateMapData(); // Refresh Map with new lines
+            updateMapData(); 
         };
 
         const deleteShape = (shapeId) => {
             if(confirm(`Delete Shape ${shapeId}?`)) {
                 store.shapes = store.shapes.filter(s => s.shape_id !== shapeId);
                 store.shapesSummary = store.shapesSummary.filter(s => s.shape_id !== shapeId);
-                // Odebrání attributu z trips
                 store.trips.forEach(t => {
                     t.dynamicFields = t.dynamicFields.filter(f => !(f.key === 'shape_id' && f.value === shapeId));
                 });
@@ -356,7 +363,6 @@ const app = createApp({
         const drawShapesOnMap = () => {
             if (!map || store.currentView !== 'Shapes') return;
             
-            // Vyčistí staré Shapes Layers
             const style = map.getStyle();
             if (style && style.layers) style.layers.forEach(l => { if (l.id.startsWith('shp-layer-')) map.removeLayer(l.id); });
             if (style && style.sources) Object.keys(style.sources).forEach(s => { if (s.startsWith('shp-src-')) map.removeSource(s); });
@@ -372,7 +378,6 @@ const app = createApp({
                 coordinates.forEach(c => bounds.extend(c));
                 hasPoints = true;
 
-                // Najde barvu linky
                 const route = store.lines.find(r => r.route_id === shpSum.route_id);
                 let color = '#2563eb';
                 if (route) {
@@ -420,7 +425,7 @@ const app = createApp({
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
             openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, 
             openTripEdit, saveTripEdit, deleteTrip, getAvailableTripAttributes, triggerTripField, moveStopTime, addStopToTrip,
-            getTripsForRoute, getStopsForTrip, addTransfer, generateShapesForRoute, deleteShape
+            getTripsForRoute, getStopsForTrip, addTransfer, generateShapesForRoute, deleteShape, isRouteShapesComplete
         };
     }
 });
