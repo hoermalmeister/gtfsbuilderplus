@@ -68,7 +68,7 @@ const store = reactive({
     newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' },
 
     shapes: [], shapesSummary: [], brouterLoading: false,
-    shapeGenConfig: { route_id: '', profile: 'car-test' }
+    shapeGenConfig: { route_id: '', profile: 'car-fast' }
 });
 
 const app = createApp({
