@@ -47,16 +47,16 @@ const store = reactive({
     feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', default_lang: '', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
     
     agencyMode: 'grid', selectedAgency: null, agencies: [], newAgency: { agency_name: '', dynamicFields: [] },
-    
     stopMode: 'grid', selectedStop: null, stops: [], activeStop: null,
-    
     lineMode: 'grid', lines: [], activeLine: null, activeDirection: '0',
-
     calendarMode: 'grid', calendar: [], activeCalendar: null, calendarDates: [],
     newException: { service_id: '', date: '', exception_type: '1' },
 
     trips: [], tripMode: 'grid', activeTripRoute: null,
-    tripGenConfig: { '0': { service_id: '', start_time: '' }, '1': { service_id: '', start_time: '' } }
+    tripGenConfig: { 
+        '0': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' }, 
+        '1': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' } 
+    }
 });
 
 const app = createApp({
@@ -116,8 +116,10 @@ const app = createApp({
             }
         };
         const getStopName = (id) => { const s = store.stops.find(s => s.stop_id === id); return s ? s.stop_name : 'Unknown'; };
+        
+        // Zde aplikujeme uložení defaultních 2 minut (120 s) při vytvoření v Lines
         const addExistingStopToPattern = () => {
-            if (selectedExistingStop.value) { store.activeLine.patterns[store.activeDirection].push({ stop_id: selectedExistingStop.value, timeOffset: 2 }); selectedExistingStop.value = ''; }
+            if (selectedExistingStop.value) { store.activeLine.patterns[store.activeDirection].push({ stop_id: selectedExistingStop.value, timeOffsetMins: 2, timeOffsetSecs: 0 }); selectedExistingStop.value = ''; }
         };
         const addStopFromCoords = () => {
             const match = coordInput.value.replace(/\s+/g, '').match(/([+-]?\d+\.?\d*)[NnSs]?\s*,\s*([+-]?\d+\.?\d*)[EeWw]?/);
@@ -129,7 +131,7 @@ const app = createApp({
                 const finalName = coordStopName.value.trim() || `Stop ${lat.toFixed(5)}`;
                 const newStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: finalName, stop_lat: lat.toFixed(7), stop_lon: lon.toFixed(7), dynamicFields: [] };
                 store.stops.push(newStop);
-                store.activeLine.patterns[store.activeDirection].push({ stop_id: newStop.stop_id, timeOffset: 2 });
+                store.activeLine.patterns[store.activeDirection].push({ stop_id: newStop.stop_id, timeOffsetMins: 2, timeOffsetSecs: 0 });
                 coordInput.value = ''; coordStopName.value = '';
             }
         };
@@ -144,35 +146,73 @@ const app = createApp({
         const deleteCalendar = () => { if(confirm('Delete?')) { store.calendar = store.calendar.filter(c => c._internal_id !== store.activeCalendar._internal_id); store.calendarMode = 'grid'; } };
         const addException = () => { store.calendarDates.push({ ...store.newException }); store.newException.date = ''; };
 
-        // --- TRIPS ---
+        // --- TRIPS & TIME LOGIC ---
         const openTripManager = (line) => { store.activeTripRoute = line; store.tripMode = 'details'; };
         const getTripsForRouteAndDir = (dir) => {
             if (!store.activeTripRoute) return [];
             return store.trips.filter(t => t.route_id === store.activeTripRoute.route_id && t.direction_id === dir)
                               .sort((a, b) => a.stop_times[0]?.departure_time.localeCompare(b.stop_times[0]?.departure_time));
         };
-        const formatGtfsTime = (totalMinutes) => {
-            const h = Math.floor(totalMinutes / 60); const m = totalMinutes % 60;
-            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+        
+        // Převede sekundy (např. 90000) na string HH:MM:SS (25:00:00)
+        const formatGtfsTime = (totalSeconds) => {
+            const h = Math.floor(totalSeconds / 3600);
+            const m = Math.floor((totalSeconds % 3600) / 60);
+            const s = totalSeconds % 60;
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         };
-        const generateTrip = (dir) => {
-            const config = store.tripGenConfig[dir];
-            const pattern = store.activeTripRoute.patterns[dir];
-            if (pattern.length === 0) { alert('No stops in Journey Pattern.'); return; }
+        
+        // Převede GTFS string HH:MM:SS na celkové sekundy pro kalkulaci
+        const timeStringToSeconds = (timeStr) => {
+            if (!timeStr) return 0;
+            const parts = timeStr.split(':').map(Number);
+            const h = parts[0] || 0;
+            const m = parts[1] || 0;
+            const s = parts[2] || 0;
+            return (h * 3600) + (m * 60) + s;
+        };
 
-            const [hh, mm] = config.start_time.split(':').map(Number);
-            let currentMinutes = (hh * 60) + mm;
+        const createTripObject = (dir, startSeconds, serviceId) => {
+            const pattern = store.activeTripRoute.patterns[dir];
+            let currentSeconds = startSeconds;
             const stopTimes = [];
 
             pattern.forEach((pStop, idx) => {
-                const timeStr = formatGtfsTime(currentMinutes);
+                const timeStr = formatGtfsTime(currentSeconds);
                 stopTimes.push({ stop_id: pStop.stop_id, stop_sequence: idx + 1, arrival_time: timeStr, departure_time: timeStr });
-                currentMinutes += (pStop.timeOffset || 0);
+                const offsetSecs = (Number(pStop.timeOffsetMins) || 0) * 60 + (Number(pStop.timeOffsetSecs) || 0);
+                currentSeconds += offsetSecs;
             });
+            return { _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: serviceId, direction_id: dir, stop_times: stopTimes, _expanded: false };
+        };
 
-            store.trips.push({ _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: config.service_id, direction_id: dir, stop_times: stopTimes, _expanded: false });
+        const generateTrip = (dir) => {
+            const config = store.tripGenConfig[dir];
+            if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
+            
+            const startSecs = timeStringToSeconds(config.start_time);
+            store.trips.push(createTripObject(dir, startSecs, config.service_id));
             config.start_time = ''; 
         };
+
+        const generateBatchTrips = (dir) => {
+            const config = store.tripGenConfig[dir];
+            if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
+            
+            let currentSecs = timeStringToSeconds(config.start_time);
+            const endSecs = timeStringToSeconds(config.end_time);
+            const intervalSecs = (Number(config.interval) || 0) * 60;
+
+            if (intervalSecs <= 0) { alert('Interval must be greater than 0 minutes.'); return; }
+            if (currentSecs > endSecs) { alert('Start time must be before end time.'); return; }
+
+            while (currentSecs <= endSecs) {
+                store.trips.push(createTripObject(dir, currentSecs, config.service_id));
+                currentSecs += intervalSecs;
+            }
+            config.start_time = ''; config.end_time = '';
+        };
+
         const deleteTrip = (internalId) => { if(confirm('Delete trip?')) store.trips = store.trips.filter(t => t._internal_id !== internalId); };
 
         // --- MAP LOGIC ---
@@ -183,7 +223,7 @@ const app = createApp({
                 if (store.currentView === 'Lines' && store.lineMode !== 'grid') {
                     const newStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: `Stop ${lat.substring(0,5)}`, stop_lat: lat, stop_lon: lon, dynamicFields: [] };
                     store.stops.push(newStop);
-                    store.activeLine.patterns[store.activeDirection].push({ stop_id: newStop.stop_id, timeOffset: 2 });
+                    store.activeLine.patterns[store.activeDirection].push({ stop_id: newStop.stop_id, timeOffsetMins: 2, timeOffsetSecs: 0 });
                 } 
                 else if (store.currentView === 'Stops' && store.stopMode !== 'grid') {
                     store.activeStop.stop_lat = lat; store.activeStop.stop_lon = lon;
@@ -236,7 +276,7 @@ const app = createApp({
             startCreateLine, openLine, saveLine, getAvailableLineAttributes, triggerLineField, getStopName, addExistingStopToPattern, addStopFromCoords,
             startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField,
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
-            openTripManager, getTripsForRouteAndDir, generateTrip, deleteTrip
+            openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, deleteTrip
         };
     }
 });
