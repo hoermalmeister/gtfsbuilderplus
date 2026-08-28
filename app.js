@@ -11,6 +11,19 @@ const agencyAttributes = [
     { key: 'cemv_support', required: false }
 ];
 
+// --- AUTOMATICKÉ GENEROVÁNÍ IANA ČASOVÝCH ZÓN ---
+// Moderní prohlížeče (Chrome, Firefox, Safari) podporují získání všech IANA zón přes Intl API.
+let commonTimezones = [];
+try {
+    // Vrátí pole stringů jako: ["Africa/Abidjan", "Africa/Accra", ..., "Europe/Prague", ...]
+    commonTimezones = Intl.supportedValuesOf('timeZone');
+} catch (e) {
+    // Fallback pro velmi staré prohlížeče
+    commonTimezones = [
+        'Europe/Prague', 'Europe/London', 'America/New_York', 'Asia/Tokyo', 'UTC'
+    ];
+}
+
 const store = reactive({
     currentView: 'Agencies',
     menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Shapes', 'Export'],
@@ -105,7 +118,7 @@ const app = createApp({
 
         // Vystavení do šablony
         return { 
-            store, agencyAttributes, openAgency, deleteSelectedAgency, 
+            store, agencyAttributes, commonTimezones, openAgency, deleteSelectedAgency, 
             startCreateAgency, getAvailableAttributes, triggerNextField, 
             saveNewAgency, addCustomField 
         };
