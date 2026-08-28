@@ -12,9 +12,8 @@
             --bg-dark: #0f172a; --bg-nav: #1e293b;
             --text-main: #334155; --border: #e2e8f0; --bg-light: #f8fafc;
         }
-
         body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Inter', sans-serif; background-color: var(--bg-light); color: var(--text-main); }
-        #sidebar { width: 260px; background-color: var(--bg-dark); color: white; display: flex; flex-direction: column; }
+        #sidebar { width: 260px; background-color: var(--bg-dark); color: white; display: flex; flex-direction: column; z-index: 10; }
         .brand { padding: 24px; font-size: 1.25rem; font-weight: 600; border-bottom: 1px solid #334155; }
         .nav-items { flex-grow: 1; padding: 16px 12px; }
         .nav-btn { width: 100%; text-align: left; background: none; border: none; color: #94a3b8; padding: 12px 16px; margin-bottom: 4px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; font-weight: 500; }
@@ -57,13 +56,14 @@
         .split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
         .split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
         .split-right { width: 50%; position: relative; background: #e2e8f0; }
-        #map-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+        .map-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
 
         .direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
         .dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; }
         .dir-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .stop-sequence-item { display: flex; gap: 12px; align-items: center; background: white; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
         .stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
+        .stop-icon { background: #e74c3c; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
         .stop-details { flex: 1; }
         .time-offset { width: 70px; text-align: right; }
         .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; }
@@ -155,10 +155,10 @@
                     </div>
                     <div class="card">
                         <div class="form-grid">
-                            <div class="form-group"><label>agency_id</label><input v-model="store.selectedAgency.agency_id"></div>
-                            <div class="form-group"><label>agency_name</label><input v-model="store.selectedAgency.agency_name"></div>
+                            <div class="form-group"><label>agency_id <span class="badge badge-req">Req</span></label><input v-model="store.selectedAgency.agency_id"></div>
+                            <div class="form-group"><label>agency_name <span class="badge badge-req">Req</span></label><input v-model="store.selectedAgency.agency_name"></div>
                             <div class="form-group" v-for="attr in agencyAttributes" :key="attr.key">
-                                <label>{{ attr.key }}</label>
+                                <label>{{ attr.key }} <span :class="['badge', attr.required ? 'badge-req' : 'badge-opt']">{{ attr.required ? 'Req' : 'Opt' }}</span></label>
                                 <input v-model="store.selectedAgency[attr.key]" :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
                             </div>
                         </div>
@@ -189,19 +189,21 @@
                         <h2 style="margin-top:0;">Line Details</h2>
                         <div class="card">
                             <div class="form-group" style="margin-bottom: 16px;">
-                                <label>route_short_name</label>
+                                <label>route_short_name <span class="badge badge-req">Required</span></label>
                                 <input v-model="store.activeLine.route_short_name" @focus="triggerLineField(-1)">
                             </div>
                             <div class="form-group" style="margin-bottom: 16px;">
-                                <label>agency_id</label>
-                                <select v-model="store.activeLine.agency_id" style="padding:10px; border-radius:6px; border:1px solid var(--border);">
+                                <label>agency_id <span class="badge badge-opt">Optional</span></label>
+                                <select v-model="store.activeLine.agency_id">
                                     <option value="">-- No specific agency --</option>
                                     <option v-for="a in store.agencies" :key="a.agency_id" :value="a.agency_id">{{ a.agency_name }}</option>
                                 </select>
                             </div>
                             <div v-for="(field, index) in store.activeLine.dynamicFields" :key="index" class="dynamic-row">
                                 <select v-model="field.key">
-                                    <option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }}</option>
+                                    <option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">
+                                        {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
+                                    </option>
                                 </select>
                                 <select v-if="field.key === 'route_type'" v-model="field.value" style="flex:1;">
                                     <option v-for="rt in routeTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option>
@@ -218,6 +220,7 @@
                         </div>
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
+                                <input v-model="coordStopName" placeholder="Stop Name (Optional)" style="flex:1;">
                                 <input v-model="coordInput" placeholder="48.5448150N, 15.6792536E" style="flex:1;">
                                 <button class="btn" @click="addStopFromCoords">Add</button>
                             </div>
@@ -238,11 +241,72 @@
                             </div>
                         </div>
                     </div>
-                    <div class="split-right"><div id="map-container"></div></div>
+                    <div class="split-right"><div id="map-container-lines" class="map-wrapper"></div></div>
                 </div>
             </div>
 
-            <div class="view-container" v-show="['Import', 'Stops', 'Trips', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
+            <!-- STOPS VIEW -->
+            <div v-show="store.currentView === 'Stops'" style="height: 100%;">
+                <datalist id="location-types">
+                    <option value="0">0 - Stop/Platform</option><option value="1">1 - Station</option>
+                    <option value="2">2 - Entrance/Exit</option><option value="3">3 - Generic Node</option>
+                    <option value="4">4 - Boarding Area</option>
+                </datalist>
+                <datalist id="wheelchair-opts">
+                    <option value="0">0 - No Info</option><option value="1">1 - Accessible</option><option value="2">2 - Not Accessible</option>
+                </datalist>
+
+                <div class="view-container" v-if="store.stopMode === 'grid'">
+                    <h1 style="margin-bottom: 24px;">Stops</h1>
+                    <div class="agencies-grid">
+                        <div class="agency-card" v-for="stop in store.stops" :key="stop._internal_id" @click="openStop(stop)">
+                            <h3>{{ stop.stop_name }}</h3>
+                            <p>{{ stop.stop_id }}</p>
+                        </div>
+                        <div class="agency-card add-card" @click="startCreateStop">+ Create Stop</div>
+                    </div>
+                </div>
+
+                <div class="split-layout" v-if="store.stopMode !== 'grid'">
+                    <div class="split-left">
+                        <div class="header-actions" style="justify-content: space-between;">
+                            <button class="btn btn-outline" @click="store.stopMode = 'grid'">← Back</button>
+                            <button class="btn" @click="saveStop" :disabled="!store.activeStop.stop_name">Save Stop</button>
+                        </div>
+                        
+                        <h2 style="margin-top:0;">Stop Details</h2>
+                        <div class="card" style="background: #f8fafc; margin-bottom: 24px; padding: 16px;">
+                            <p style="margin:0; font-size: 0.85rem; color: #64748b;">Hint: Click anywhere on the map to set or update coordinates.</p>
+                        </div>
+
+                        <div class="card">
+                            <div class="form-grid">
+                                <div class="form-group"><label>stop_id <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_id" disabled></div>
+                                <div class="form-group"><label>stop_name <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_name" @focus="triggerStopField(-1)"></div>
+                                <div class="form-group"><label>stop_lat <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lat"></div>
+                                <div class="form-group"><label>stop_lon <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lon"></div>
+                            </div>
+                            
+                            <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
+                            
+                            <div v-for="(field, index) in store.activeStop.dynamicFields" :key="index" class="dynamic-row">
+                                <select v-model="field.key">
+                                    <option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">
+                                        {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
+                                    </option>
+                                </select>
+                                <input v-model="field.value" @focus="triggerStopField(index)" style="flex: 1;"
+                                       :list="field.key === 'location_type' ? 'location-types' : (field.key === 'wheelchair_boarding' ? 'wheelchair-opts' : (field.key === 'stop_timezone' ? 'tz-suggestions' : null))">
+                                <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeStop.dynamicFields.splice(index, 1)">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="split-right"><div id="map-container-stops" class="map-wrapper"></div></div>
+                </div>
+            </div>
+
+            <!-- OTHER VIEWS -->
+            <div class="view-container" v-show="['Import', 'Trips', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
                 <p>This section is under construction.</p>
             </div>
