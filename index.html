@@ -416,7 +416,6 @@
                                 <button class="btn" @click="generateBatchTrips('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].end_time || !store.tripGenConfig['0'].interval || !store.tripGenConfig['0'].service_id">Gen</button>
                             </div>
                         </div>
-
                         <div v-for="trip in getTripsForRouteAndDir('0')" :key="trip._internal_id" class="stop-sequence-item" style="justify-content: space-between;">
                             <div><strong>Departs: {{ trip.stop_times[0]?.departure_time }}</strong> <span class="badge badge-opt">{{ trip.service_id }}</span></div>
                             <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" @click="openTripEdit(trip)">Edit Trip</button>
@@ -443,7 +442,6 @@
                                 <button class="btn" @click="generateBatchTrips('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].end_time || !store.tripGenConfig['1'].interval || !store.tripGenConfig['1'].service_id">Gen</button>
                             </div>
                         </div>
-
                         <div v-for="trip in getTripsForRouteAndDir('1')" :key="trip._internal_id" class="stop-sequence-item" style="justify-content: space-between;">
                             <div><strong>Departs: {{ trip.stop_times[0]?.departure_time }}</strong> <span class="badge badge-opt">{{ trip.service_id }}</span></div>
                             <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" @click="openTripEdit(trip)">Edit Trip</button>
@@ -451,7 +449,6 @@
                     </div>
                 </div>
 
-                <!-- Single Trip Edit Layout -->
                 <div class="split-layout" v-if="store.tripMode === 'edit' && store.activeTripEdit">
                     <div style="position: absolute; top: 0; left: 0; right: 0; padding: 20px 40px; background: white; border-bottom: 1px solid var(--border); z-index: 5; display: flex; gap: 16px; align-items: center; justify-content: space-between;">
                         <div style="display: flex; gap: 16px; align-items: center;">
@@ -472,7 +469,6 @@
                                     <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
                                 </select>
                             </div>
-                            
                             <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
                             <div v-for="(field, index) in store.activeTripEdit.dynamicFields" :key="index" class="dynamic-row">
                                 <select v-model="field.key"><option v-for="opt in getAvailableTripAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option></select>
@@ -598,15 +594,46 @@
                 </div>
             </div>
 
-            <!-- PLACEHOLDERS -->
-            <div class="view-container" v-show="['Import', 'Export'].includes(store.currentView)">
-                <h1>{{ store.currentView }}</h1>
+            <!-- EXPORT VIEW -->
+            <div class="view-container" v-show="store.currentView === 'Export'">
+                <h1>Export GTFS Data</h1>
+                <div class="card" style="text-align: center; padding: 40px 24px;">
+                    <h2 style="margin-top: 0;">Generate GTFS Package</h2>
+                    <p style="color: #64748b; margin-bottom: 32px;">All your data will be converted to CSV files and packed into a valid gtfs.zip file.</p>
+                    <button class="btn" style="font-size: 1.2rem; padding: 16px 32px;" @click="exportGTFS" :disabled="isExporting">
+                        {{ isExporting ? 'Generating ZIP...' : '📥 Download gtfs.zip' }}
+                    </button>
+                    <div v-if="exportMessage" style="margin-top: 24px; padding: 12px; border-radius: 8px;" :style="{ backgroundColor: exportError ? '#fee2e2' : '#dcfce3', color: exportError ? '#b91c1c' : '#166534' }">
+                        {{ exportMessage }}
+                    </div>
+                </div>
+
+                <div class="card" style="border: 1px solid #bfdbfe; background: #eff6ff;">
+                    <div style="display: flex; gap: 24px; align-items: center;">
+                        <div style="flex: 1;">
+                            <h3 style="margin-top: 0; color: #1e3a8a;">MobilityData GTFS Validator</h3>
+                            <p style="color: #1e40af; font-size: 0.9rem; margin-bottom: 0;">
+                                The official GTFS Validator requires a Java backend. To validate your exported feed, use their official cloud verifier. Just download the ZIP above and drag-and-drop it there.
+                            </p>
+                        </div>
+                        <a href="https://gtfs-validator.mobilitydata.org/" target="_blank" class="btn btn-outline" style="background: white; border-color: #3b82f6; color: #2563eb; text-decoration: none;">
+                            Open Web Validator ↗
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IMPORT VIEW -->
+            <div class="view-container" v-show="store.currentView === 'Import'">
+                <h1>Import</h1>
                 <p>This section is under construction.</p>
             </div>
         </main>
     </div>
     
     <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
+    <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
     <script type="module" src="./app.js"></script>
 </body>
 </html>
