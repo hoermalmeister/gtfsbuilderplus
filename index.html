@@ -75,7 +75,7 @@
         .stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
         .stop-icon { background: #e74c3c; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
         .stop-details { flex: 1; }
-        .time-offset { width: 70px; text-align: right; }
+        .time-offset { width: 45px; text-align: center; padding: 6px; }
         .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
     </style>
 </head>
@@ -231,8 +231,8 @@
 
                         <h2>Journey Pattern</h2>
                         <div class="direction-toggle">
-                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
-                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound</div>
                         </div>
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
@@ -252,7 +252,13 @@
                                     <div style="font-weight:600;">{{ getStopName(pStop.stop_id) }}</div>
                                     <div style="font-size:0.75rem;">{{ pStop.stop_id }}</div>
                                 </div>
-                                <div><label style="font-size:0.7rem;">+ Min</label><input type="number" v-model="pStop.timeOffset" class="time-offset"></div>
+                                <div>
+                                    <label style="font-size:0.7rem; display: block; margin-bottom: 2px;">+ Time (MM:SS)</label>
+                                    <div style="display: flex; align-items: center; gap: 4px;">
+                                        <input type="number" v-model="pStop.timeOffsetMins" class="time-offset" min="0" placeholder="0"> : 
+                                        <input type="number" v-model="pStop.timeOffsetSecs" class="time-offset" min="0" max="59" placeholder="0">
+                                    </div>
+                                </div>
                                 <button class="btn btn-danger" @click="store.activeLine.patterns[store.activeDirection].splice(idx, 1)">✕</button>
                             </div>
                         </div>
@@ -403,16 +409,35 @@
                         <h2 style="margin: 0; color: var(--primary);">Line {{ store.activeTripRoute.route_short_name }} Trips</h2>
                     </div>
 
+                    <!-- OUTBOUND (Direction 0) -->
                     <div class="split-top" style="padding-top: 60px;">
-                        <h3>Outbound (Tam) - Dir 0</h3>
+                        <h3>Outbound - Dir 0</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
-                            <div class="coord-input-row">
+                            <div style="margin-bottom: 12px; font-size: 0.9rem;">
+                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['0'].mode" value="single"> Single Trip</label>
+                                <label><input type="radio" v-model="store.tripGenConfig['0'].mode" value="batch"> Batch Trips (Interval)</label>
+                            </div>
+                            
+                            <!-- Single Mode -->
+                            <div class="coord-input-row" v-if="store.tripGenConfig['0'].mode === 'single'">
                                 <select v-model="store.tripGenConfig['0'].service_id" style="flex: 2;">
                                     <option value="">-- Select Service --</option>
                                     <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
                                 </select>
-                                <input type="time" v-model="store.tripGenConfig['0'].start_time" style="flex: 1;">
-                                <button class="btn" @click="generateTrip('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].service_id">Generate Trip</button>
+                                <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS" style="flex: 1;" title="Start Time">
+                                <button class="btn" @click="generateTrip('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].service_id">Generate</button>
+                            </div>
+
+                            <!-- Batch Mode -->
+                            <div class="coord-input-row" v-if="store.tripGenConfig['0'].mode === 'batch'">
+                                <select v-model="store.tripGenConfig['0'].service_id" style="flex: 2;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS (Start)" style="flex: 1;">
+                                <input type="text" v-model="store.tripGenConfig['0'].end_time" placeholder="HH:MM:SS (End)" style="flex: 1;">
+                                <input type="number" v-model="store.tripGenConfig['0'].interval" placeholder="Mins" style="width: 70px;" title="Interval (minutes)">
+                                <button class="btn" @click="generateBatchTrips('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].end_time || !store.tripGenConfig['0'].interval || !store.tripGenConfig['0'].service_id">Generate</button>
                             </div>
                         </div>
 
@@ -425,24 +450,43 @@
                                 <div v-for="st in trip.stop_times" :key="st.stop_sequence" class="coord-input-row" style="margin-bottom: 8px;">
                                     <div class="stop-number" style="width: 20px; height: 20px; font-size: 0.7rem;">{{ st.stop_sequence }}</div>
                                     <span style="flex: 2; font-size: 0.9rem;">{{ getStopName(st.stop_id) }}</span>
-                                    <input v-model="st.arrival_time" style="width: 100px; padding: 6px;" title="Arrival HH:MM:SS">
-                                    <input v-model="st.departure_time" style="width: 100px; padding: 6px;" title="Departure HH:MM:SS">
+                                    <input type="text" v-model="st.arrival_time" style="width: 90px; padding: 6px;" title="Arrival HH:MM:SS">
+                                    <input type="text" v-model="st.departure_time" style="width: 90px; padding: 6px;" title="Departure HH:MM:SS">
                                 </div>
                                 <div style="text-align: right; margin-top: 12px;"><button class="btn btn-danger" @click="deleteTrip(trip._internal_id)">Delete Trip</button></div>
                             </div>
                         </div>
                     </div>
 
+                    <!-- INBOUND (Direction 1) -->
                     <div class="split-bottom">
-                        <h3>Inbound (Zpět) - Dir 1</h3>
+                        <h3>Inbound - Dir 1</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
-                            <div class="coord-input-row">
+                            <div style="margin-bottom: 12px; font-size: 0.9rem;">
+                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['1'].mode" value="single"> Single Trip</label>
+                                <label><input type="radio" v-model="store.tripGenConfig['1'].mode" value="batch"> Batch Trips (Interval)</label>
+                            </div>
+                            
+                            <!-- Single Mode -->
+                            <div class="coord-input-row" v-if="store.tripGenConfig['1'].mode === 'single'">
                                 <select v-model="store.tripGenConfig['1'].service_id" style="flex: 2;">
                                     <option value="">-- Select Service --</option>
                                     <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
                                 </select>
-                                <input type="time" v-model="store.tripGenConfig['1'].start_time" style="flex: 1;">
-                                <button class="btn" @click="generateTrip('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].service_id">Generate Trip</button>
+                                <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS" style="flex: 1;" title="Start Time">
+                                <button class="btn" @click="generateTrip('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].service_id">Generate</button>
+                            </div>
+
+                            <!-- Batch Mode -->
+                            <div class="coord-input-row" v-if="store.tripGenConfig['1'].mode === 'batch'">
+                                <select v-model="store.tripGenConfig['1'].service_id" style="flex: 2;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS (Start)" style="flex: 1;">
+                                <input type="text" v-model="store.tripGenConfig['1'].end_time" placeholder="HH:MM:SS (End)" style="flex: 1;">
+                                <input type="number" v-model="store.tripGenConfig['1'].interval" placeholder="Mins" style="width: 70px;" title="Interval (minutes)">
+                                <button class="btn" @click="generateBatchTrips('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].end_time || !store.tripGenConfig['1'].interval || !store.tripGenConfig['1'].service_id">Generate</button>
                             </div>
                         </div>
 
@@ -455,8 +499,8 @@
                                 <div v-for="st in trip.stop_times" :key="st.stop_sequence" class="coord-input-row" style="margin-bottom: 8px;">
                                     <div class="stop-number" style="width: 20px; height: 20px; font-size: 0.7rem;">{{ st.stop_sequence }}</div>
                                     <span style="flex: 2; font-size: 0.9rem;">{{ getStopName(st.stop_id) }}</span>
-                                    <input v-model="st.arrival_time" style="width: 100px; padding: 6px;">
-                                    <input v-model="st.departure_time" style="width: 100px; padding: 6px;">
+                                    <input type="text" v-model="st.arrival_time" style="width: 90px; padding: 6px;">
+                                    <input type="text" v-model="st.departure_time" style="width: 90px; padding: 6px;">
                                 </div>
                                 <div style="text-align: right; margin-top: 12px;"><button class="btn btn-danger" @click="deleteTrip(trip._internal_id)">Delete Trip</button></div>
                             </div>
