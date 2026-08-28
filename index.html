@@ -4,440 +4,252 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GTFS Editor</title>
-    <!-- Modern Font: Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.css" rel="stylesheet" />
     <style>
         :root {
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --bg-dark: #0f172a;
-            --bg-nav: #1e293b;
-            --text-main: #334155;
-            --border: #e2e8f0;
-            --bg-light: #f8fafc;
+            --primary: #2563eb; --primary-hover: #1d4ed8;
+            --bg-dark: #0f172a; --bg-nav: #1e293b;
+            --text-main: #334155; --border: #e2e8f0; --bg-light: #f8fafc;
         }
 
-        body { 
-            margin: 0; padding: 0; 
-            display: flex; height: 100vh; 
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-light);
-            color: var(--text-main);
-        }
-
-        /* Sidebar Navigation */
-        #sidebar {
-            width: 260px;
-            background-color: var(--bg-dark);
-            color: white;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .brand { padding: 24px; font-size: 1.25rem; font-weight: 600; letter-spacing: 0.5px; border-bottom: 1px solid #334155; }
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Inter', sans-serif; background-color: var(--bg-light); color: var(--text-main); }
+        #sidebar { width: 260px; background-color: var(--bg-dark); color: white; display: flex; flex-direction: column; }
+        .brand { padding: 24px; font-size: 1.25rem; font-weight: 600; border-bottom: 1px solid #334155; }
         .nav-items { flex-grow: 1; padding: 16px 12px; }
-        
-        .nav-btn {
-            width: 100%; text-align: left; background: none; border: none;
-            color: #94a3b8; padding: 12px 16px; margin-bottom: 4px;
-            border-radius: 8px; font-size: 0.95rem; cursor: pointer;
-            transition: all 0.2s; font-family: inherit; font-weight: 500;
-        }
+        .nav-btn { width: 100%; text-align: left; background: none; border: none; color: #94a3b8; padding: 12px 16px; margin-bottom: 4px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; font-weight: 500; }
         .nav-btn:hover { background-color: var(--bg-nav); color: white; }
         .nav-btn.active { background-color: var(--primary); color: white; }
 
-        /* Main Content Area */
         #content { flex-grow: 1; overflow-y: auto; padding: 40px; }
         .view-container { max-width: 800px; margin: 0 auto; }
-        
         h1 { margin-top: 0; font-size: 1.8rem; color: #0f172a; }
         .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px; }
         
-        /* Forms */
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .form-group { display: flex; flex-direction: column; }
-        .form-group.full-width { grid-column: 1 / -1; }
-        
         label { font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 6px; }
-        input {
-            padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
-            font-size: 0.95rem; font-family: inherit; transition: border-color 0.2s;
-        }
-        input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+        input, select { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; font-family: inherit; }
+        input:focus, select:focus { outline: none; border-color: var(--primary); }
         
-        .btn {
-            background: var(--primary); color: white; border: none; padding: 8px 16px;
-            border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.2s; font-family: inherit;
-        }
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; }
         .btn:hover { background: var(--primary-hover); }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
-        .btn-outline:hover { background: var(--bg-light); border-color: #cbd5e1; }
         .btn-danger { background: #ef4444; color: white; padding: 6px 12px; font-size: 0.85rem; }
 
         .custom-field-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: center; }
         .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         
-        /* Obal pro mapu, skrytý pokud nejsme v příslušné záložce */
-        #map-container { display: none; width: 100%; height: 100%; }
-        #map-container.active { display: block; }
-        /* Agencies Grid & Cards */
-.agencies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-.agency-card {
-    background: white; padding: 24px 16px; border-radius: 12px; cursor: pointer;
-    border: 1px solid var(--border); transition: all 0.2s;
-    display: flex; flex-direction: column; justify-content: center; align-items: center;
-    text-align: center; height: 140px; box-sizing: border-box;
-}
-.agency-card h3 { margin: 0 0 8px 0; font-size: 1.1rem; color: #0f172a; }
-.agency-card p { margin: 0; font-size: 0.85rem; color: #64748b; }
-.agency-card:hover { border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .agencies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+        .agency-card { background: white; padding: 24px 16px; border-radius: 12px; cursor: pointer; border: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; height: 140px; box-sizing: border-box; }
+        .agency-card h3 { margin: 0 0 8px 0; font-size: 1.1rem; color: #0f172a; }
+        .agency-card p { margin: 0; font-size: 0.85rem; color: #64748b; }
+        .add-card { border: 2px dashed #cbd5e1; background: transparent; color: #64748b; font-weight: 600; }
+        
+        .badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: 600; text-transform: uppercase; }
+        .badge-req { background: #fee2e2; color: #b91c1c; }
+        .badge-opt { background: #f1f5f9; color: #64748b; }
 
-.add-card { border: 2px dashed #cbd5e1; background: transparent; color: #64748b; font-weight: 600; }
-.add-card:hover { border-color: var(--primary); color: var(--primary); background: #eff6ff; }
+        .dynamic-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+        .dynamic-row select { width: 35%; cursor: pointer; }
+        .header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
 
-/* Badges for Required/Optional */
-.badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.badge-req { background: #fee2e2; color: #b91c1c; }
-.badge-opt { background: #f1f5f9; color: #64748b; }
+        .split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
+        .split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
+        .split-right { width: 50%; position: relative; background: #e2e8f0; }
+        #map-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
 
-/* Dynamic Row for creating Agency */
-.dynamic-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
-.dynamic-row select { 
-    width: 35%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; 
-    font-family: inherit; font-size: 0.95rem; background-color: #f8fafc; cursor: pointer;
-}
-.dynamic-row select:focus { outline: none; border-color: var(--primary); }
-.header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
-
-        /* Split View & Map */
-.split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
-.split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
-.split-right { width: 50%; position: relative; background: #e2e8f0; }
-#map-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
-
-/* Direction Toggle */
-.direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
-.dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; transition: 0.2s; }
-.dir-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-
-/* Stops Sequence */
-.stop-sequence-item { display: flex; gap: 12px; align-items: center; background: white; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
-.stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
-.stop-details { flex: 1; }
-.time-offset { width: 70px; text-align: right; }
-
-.coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
+        .dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; }
+        .dir-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .stop-sequence-item { display: flex; gap: 12px; align-items: center; background: white; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
+        .stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
+        .stop-details { flex: 1; }
+        .time-offset { width: 70px; text-align: right; }
+        .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
     <div id="app" style="display: contents;">
-        <!-- Sidebar Navigation -->
         <nav id="sidebar">
             <div class="brand">GTFS Builder</div>
             <div class="nav-items">
-                <button 
-                    v-for="item in store.menuItems" 
-                    :key="item"
-                    class="nav-btn" 
-                    :class="{ active: store.currentView === item }"
-                    @click="store.currentView = item">
+                <button v-for="item in store.menuItems" :key="item" class="nav-btn" :class="{ active: store.currentView === item }" @click="store.currentView = item">
                     {{ item }}
                 </button>
             </div>
         </nav>
 
-        <!-- Main Content -->
-        <main id="content" v-show="store.currentView !== 'Stops' && store.currentView !== 'Lines'">
-            
+        <main id="content">
             <!-- FEED INFO VIEW -->
-            <div class="view-container" v-if="store.currentView === 'Feed info'">
+            <div class="view-container" v-show="store.currentView === 'Feed info'">
                 <h1>Feed Information</h1>
                 <div class="card">
                     <div class="form-grid">
-                        <div class="form-group">
-                            <label>Publisher Name</label>
-                            <input v-model="store.feedInfo.feed_publisher_name" placeholder="e.g. Transit Agency">
-                        </div>
-                        <div class="form-group">
-                            <label>Publisher URL</label>
-                            <input v-model="store.feedInfo.feed_publisher_url" placeholder="https://...">
-                        </div>
-                        <div class="form-group">
-                            <label>Language (ISO 639-1)</label>
-                            <input v-model="store.feedInfo.feed_lang" placeholder="en">
-                        </div>
-                        <div class="form-group">
-                            <label>Feed Version</label>
-                            <input v-model="store.feedInfo.feed_version" placeholder="1.0.0">
-                        </div>
-                        <div class="form-group">
-                            <label>Start Date (YYYYMMDD)</label>
-                            <input v-model="store.feedInfo.feed_start_date" placeholder="20240101">
-                        </div>
-                        <div class="form-group">
-                            <label>End Date (YYYYMMDD)</label>
-                            <input v-model="store.feedInfo.feed_end_date" placeholder="20241231">
-                        </div>
-                        <div class="form-group">
-                            <label>Contact Email</label>
-                            <input v-model="store.feedInfo.feed_contact_email" placeholder="contact@agency.com">
-                        </div>
-                        <div class="form-group">
-                            <label>Contact URL</label>
-                            <input v-model="store.feedInfo.feed_contact_url" placeholder="https://.../contact">
-                        </div>
+                        <div class="form-group"><label>Publisher Name</label><input v-model="store.feedInfo.feed_publisher_name"></div>
+                        <div class="form-group"><label>Publisher URL</label><input v-model="store.feedInfo.feed_publisher_url"></div>
+                        <div class="form-group"><label>Language</label><input v-model="store.feedInfo.feed_lang"></div>
+                        <div class="form-group"><label>Feed Version</label><input v-model="store.feedInfo.feed_version"></div>
                     </div>
                 </div>
-
-                <!-- Custom Fields for Feed Info -->
                 <div class="card">
                     <div class="flex-between">
                         <h3 style="margin: 0;">Custom Fields</h3>
                         <button class="btn btn-outline" @click="addCustomField(store.feedInfo.customFields)">+ Add Field</button>
                     </div>
                     <div v-for="(field, index) in store.feedInfo.customFields" :key="index" class="custom-field-row">
-                        <input v-model="field.key" placeholder="Key (e.g. feed_id)" style="flex: 1;">
+                        <input v-model="field.key" placeholder="Key" style="flex: 1;">
                         <input v-model="field.value" placeholder="Value" style="flex: 2;">
                         <button class="btn btn-danger" @click="store.feedInfo.customFields.splice(index, 1)">✕</button>
                     </div>
-                    <p v-if="store.feedInfo.customFields.length === 0" style="color: #94a3b8; font-size: 0.9rem;">No custom fields added.</p>
                 </div>
             </div>
 
             <!-- AGENCIES VIEW -->
-<div class="view-container" v-if="store.currentView === 'Agencies'" style="max-width: 900px;">
-    
-    <!-- Neviditelné našeptávače (Datalisty) -->
-    <datalist id="lang-suggestions">
-        <option :value="store.feedInfo.feed_lang">Default from Feed Info</option>
-    </datalist>
-    <datalist id="tz-suggestions">
-        <option v-for="tz in commonTimezones" :key="tz" :value="tz"></option>
-    </datalist>
+            <div class="view-container" v-show="store.currentView === 'Agencies'" style="max-width: 900px;">
+                <datalist id="lang-suggestions"><option :value="store.feedInfo.feed_lang">Default</option></datalist>
+                <datalist id="tz-suggestions"><option v-for="tz in commonTimezones" :key="tz" :value="tz"></option></datalist>
 
-    <!-- 1. GRID VIEW -->
-    <div v-if="store.agencyMode === 'grid'">
-        <h1 style="margin-bottom: 24px;">Agencies</h1>
-        <div class="agencies-grid">
-            <div class="agency-card" v-for="agency in store.agencies" :key="agency._internal_id" @click="openAgency(agency)">
-                <h3>{{ agency.agency_name || 'Unnamed Agency' }}</h3>
-                <p>ID: {{ agency.agency_id }}</p>
-            </div>
-            <div class="agency-card add-card" @click="startCreateAgency">
-                + Add Agency
-            </div>
-        </div>
-    </div>
-
-    <!-- 2. CREATE NEW AGENCY VIEW -->
-    <div v-if="store.agencyMode === 'create'">
-        <div class="header-actions">
-            <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
-            <h2 style="margin: 0;">Create New Agency</h2>
-        </div>
-        
-        <div class="card">
-            <div class="form-group" style="margin-bottom: 16px;">
-                <label>Agency Name <span class="badge badge-req">Required</span></label>
-                <input v-model="store.newAgency.agency_name" placeholder="e.g. City Transit" @focus="triggerNextField(-1)">
-            </div>
-
-            <!-- Dynamicky přidávaná pole -->
-            <div v-for="(field, index) in store.newAgency.dynamicFields" :key="index" class="dynamic-row">
-                <select v-model="field.key">
-                    <option v-for="opt in getAvailableAttributes(field.key)" :key="opt.key" :value="opt.key">
-                        {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
-                    </option>
-                </select>
-                <!-- ZDE JE ZMĚNA: Dynamické přidání atributu :list podle vybraného klíče -->
-                <input v-model="field.value" 
-                       placeholder="Enter value..." 
-                       @focus="triggerNextField(index)" 
-                       style="flex: 1;"
-                       :list="field.key === 'agency_lang' ? 'lang-suggestions' : (field.key === 'agency_timezone' ? 'tz-suggestions' : null)">
-                <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.newAgency.dynamicFields.splice(index, 1)">✕</button>
-            </div>
-        </div>
-
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
-            <button class="btn btn-outline" @click="store.agencyMode = 'grid'">Cancel</button>
-            <button class="btn" @click="saveNewAgency" :disabled="!store.newAgency.agency_name">Save Agency</button>
-        </div>
-    </div>
-
-    <!-- 3. EDIT AGENCY DETAILS VIEW -->
-    <div v-if="store.agencyMode === 'details' && store.selectedAgency">
-        <div class="header-actions" style="justify-content: space-between;">
-            <div style="display: flex; gap: 12px; align-items: center;">
-                <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
-                <h2 style="margin: 0;">{{ store.selectedAgency.agency_name }}</h2>
-            </div>
-            <button class="btn btn-danger" @click="deleteSelectedAgency">Delete Agency</button>
-        </div>
-
-        <div class="card">
-            <div class="form-grid">
-                <div class="form-group">
-                    <label>agency_id <span class="badge badge-req">Required*</span></label>
-                    <input v-model="store.selectedAgency.agency_id">
-                </div>
-                <div class="form-group">
-                    <label>agency_name <span class="badge badge-req">Required</span></label>
-                    <input v-model="store.selectedAgency.agency_name">
-                </div>
-                
-                <!-- ZDE JE ZMĚNA: Našeptávač pro už vytvořeného dopravce -->
-                <div class="form-group" v-for="attr in agencyAttributes" :key="attr.key">
-                    <label>
-                        {{ attr.key }} 
-                        <span :class="['badge', attr.required ? 'badge-req' : 'badge-opt']">
-                            {{ attr.required ? 'Required' : 'Optional' }}
-                        </span>
-                    </label>
-                    <input v-model="store.selectedAgency[attr.key]"
-                           :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
-                </div>
-            </div>
-
-            <!-- Custom Fields (Zůstává nezměněno) -->
-            <div style="margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px;">
-                <div class="flex-between" style="margin-bottom: 16px;">
-                    <h3 style="margin: 0;">Custom Fields</h3>
-                    <button class="btn btn-outline" @click="addCustomField(store.selectedAgency.customFields)">+ Add Field</button>
-                </div>
-                <div v-for="(field, fIndex) in store.selectedAgency.customFields" :key="fIndex" class="custom-field-row">
-                    <input v-model="field.key" placeholder="Custom Key" style="flex: 1;">
-                    <input v-model="field.value" placeholder="Value" style="flex: 2;">
-                    <button class="btn btn-danger" @click="store.selectedAgency.customFields.splice(fIndex, 1)">✕</button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- AGENCIES VIEW (Zůstává vizuálně stejné, zkráceno pro přehlednost, nech svůj kód pro Agencies) -->
-<div class="view-container" v-show="store.currentView === 'Agencies' || store.currentView === 'Feed info'">
-    <!-- Tady ponech svůj stávající kód pro Feed info a Agencies -->
-    <h1 v-if="store.currentView === 'Feed info'">Feed Information (Oříznuto pro náhled - nech svůj kód)</h1>
-    <h1 v-if="store.currentView === 'Agencies'">Agencies (Oříznuto pro náhled - nech svůj kód)</h1>
-</div>
-
-<!-- LINES VIEW -->
-<div v-show="store.currentView === 'Lines'" style="height: 100%;">
-    
-    <!-- GRID VIEW -->
-    <div class="view-container" v-if="store.lineMode === 'grid'">
-        <div class="header-actions">
-            <h1 style="margin: 0;">Lines (Routes)</h1>
-        </div>
-        <div class="agencies-grid">
-            <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openLine(line)">
-                <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
-                <p>{{ line.route_long_name || 'No long name' }}</p>
-            </div>
-            <div class="agency-card add-card" @click="startCreateLine">
-                + Create Line
-            </div>
-        </div>
-    </div>
-
-    <!-- CREATE/EDIT SPLIT VIEW -->
-    <div class="split-layout" v-if="store.lineMode !== 'grid'">
-        <!-- LEFT HALF: Data -->
-        <div class="split-left">
-            <div class="header-actions" style="justify-content: space-between;">
-                <button class="btn btn-outline" @click="store.lineMode = 'grid'">← Back</button>
-                <button class="btn" @click="saveLine" :disabled="!store.activeLine.route_short_name">Save Line</button>
-            </div>
-            
-            <h2 style="margin-top:0;">Line Details</h2>
-            <div class="card">
-                <div class="form-group" style="margin-bottom: 16px;">
-                    <label>route_short_name <span class="badge badge-req">Required</span></label>
-                    <input v-model="store.activeLine.route_short_name" placeholder="e.g. 10, A, Blue" @focus="triggerLineField(-1)">
-                </div>
-
-                <div class="form-group" style="margin-bottom: 16px;">
-                    <label>agency_id <span class="badge badge-opt">Optional</span></label>
-                    <select v-model="store.activeLine.agency_id" style="padding:10px; border-radius:6px; border:1px solid var(--border);">
-                        <option value="">-- No specific agency --</option>
-                        <option v-for="a in store.agencies" :key="a.agency_id" :value="a.agency_id">{{ a.agency_name }}</option>
-                    </select>
-                </div>
-
-                <div v-for="(field, index) in store.activeLine.dynamicFields" :key="index" class="dynamic-row">
-                    <select v-model="field.key">
-                        <option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">
-                            {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
-                        </option>
-                    </select>
-                    
-                    <!-- Dropdown pro route_type (0-12) -->
-                    <select v-if="field.key === 'route_type'" v-model="field.value" style="flex:1;">
-                        <option v-for="rt in routeTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option>
-                    </select>
-                    
-                    <input v-else v-model="field.value" placeholder="Value..." @focus="triggerLineField(index)" style="flex: 1;">
-                    <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeLine.dynamicFields.splice(index, 1)">✕</button>
-                </div>
-            </div>
-
-            <hr style="border:0; border-top: 1px solid var(--border); margin: 32px 0;">
-
-            <!-- ROUTING & STOPS SEQUENCE -->
-            <h2>Journey Pattern</h2>
-            <div class="direction-toggle">
-                <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
-                <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
-            </div>
-
-            <div class="card" style="background: #f8fafc;">
-                <h4>Add Stop</h4>
-                <p style="font-size:0.85rem; color:#64748b;">Click on the map to create a stop, select an existing one, or paste coordinates.</p>
-                <div class="coord-input-row">
-                    <input v-model="coordInput" placeholder="48.5448150N, 15.6792536E" style="flex:1;">
-                    <button class="btn" @click="addStopFromCoords">Add from Coords</button>
-                </div>
-                
-                <select v-model="selectedExistingStop" @change="addExistingStopToPattern" style="width:100%; padding:10px; margin-bottom: 24px;">
-                    <option value="">-- Or select existing stop --</option>
-                    <option v-for="s in store.stops" :key="s.stop_id" :value="s.stop_id">{{ s.stop_name }} ({{s.stop_id}})</option>
-                </select>
-
-                <h4>Stop Sequence (Direction: {{ store.activeDirection }})</h4>
-                <div v-for="(pStop, idx) in store.activeLine.patterns[store.activeDirection]" :key="idx" class="stop-sequence-item">
-                    <div class="stop-number">{{ idx + 1 }}</div>
-                    <div class="stop-details">
-                        <div style="font-weight:600;">{{ getStopName(pStop.stop_id) }}</div>
-                        <div style="font-size:0.75rem; color:#64748b;">{{ pStop.stop_id }}</div>
+                <div v-if="store.agencyMode === 'grid'">
+                    <h1 style="margin-bottom: 24px;">Agencies</h1>
+                    <div class="agencies-grid">
+                        <div class="agency-card" v-for="agency in store.agencies" :key="agency._internal_id" @click="openAgency(agency)">
+                            <h3>{{ agency.agency_name || 'Unnamed' }}</h3>
+                            <p>ID: {{ agency.agency_id }}</p>
+                        </div>
+                        <div class="agency-card add-card" @click="startCreateAgency">+ Add Agency</div>
                     </div>
-                    <div>
-                        <label style="font-size:0.7rem; display:block;">+ Min</label>
-                        <input type="number" v-model="pStop.timeOffset" class="time-offset" min="0">
-                    </div>
-                    <button class="btn btn-danger" @click="store.activeLine.patterns[store.activeDirection].splice(idx, 1)">✕</button>
                 </div>
-                <div v-if="!store.activeLine.patterns[store.activeDirection].length" style="color:#64748b; font-size:0.9rem;">
-                    No stops in this direction yet.
+
+                <div v-if="store.agencyMode === 'create'">
+                    <div class="header-actions">
+                        <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
+                        <h2 style="margin: 0;">Create New Agency</h2>
+                    </div>
+                    <div class="card">
+                        <div class="form-group" style="margin-bottom: 16px;">
+                            <label>Agency Name <span class="badge badge-req">Required</span></label>
+                            <input v-model="store.newAgency.agency_name" @focus="triggerAgencyField(-1)">
+                        </div>
+                        <div v-for="(field, index) in store.newAgency.dynamicFields" :key="index" class="dynamic-row">
+                            <select v-model="field.key">
+                                <option v-for="opt in getAvailableAttributes(field.key)" :key="opt.key" :value="opt.key">
+                                    {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
+                                </option>
+                            </select>
+                            <input v-model="field.value" @focus="triggerAgencyField(index)" style="flex: 1;"
+                                   :list="field.key === 'agency_lang' ? 'lang-suggestions' : (field.key === 'agency_timezone' ? 'tz-suggestions' : null)">
+                            <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.newAgency.dynamicFields.splice(index, 1)">✕</button>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                        <button class="btn btn-outline" @click="store.agencyMode = 'grid'">Cancel</button>
+                        <button class="btn" @click="saveNewAgency" :disabled="!store.newAgency.agency_name">Save Agency</button>
+                    </div>
+                </div>
+
+                <div v-if="store.agencyMode === 'details' && store.selectedAgency">
+                    <div class="header-actions" style="justify-content: space-between;">
+                        <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
+                        <button class="btn btn-danger" @click="deleteSelectedAgency">Delete Agency</button>
+                    </div>
+                    <div class="card">
+                        <div class="form-grid">
+                            <div class="form-group"><label>agency_id</label><input v-model="store.selectedAgency.agency_id"></div>
+                            <div class="form-group"><label>agency_name</label><input v-model="store.selectedAgency.agency_name"></div>
+                            <div class="form-group" v-for="attr in agencyAttributes" :key="attr.key">
+                                <label>{{ attr.key }}</label>
+                                <input v-model="store.selectedAgency[attr.key]" :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- RIGHT HALF: Map -->
-        <div class="split-right">
-            <!-- MapLibre kontejner -->
-            <div id="map-container"></div>
-        </div>
-    </div>
-</div>
-            <!-- Zástupné prázdné views pro ostatní záložky -->
-            <div class="view-container" v-if="['Import', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
+            <!-- LINES VIEW -->
+            <div v-show="store.currentView === 'Lines'" style="height: 100%;">
+                <div class="view-container" v-if="store.lineMode === 'grid'">
+                    <h1 style="margin-bottom: 24px;">Lines (Routes)</h1>
+                    <div class="agencies-grid">
+                        <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openLine(line)">
+                            <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
+                            <p>{{ line.route_long_name || 'No long name' }}</p>
+                        </div>
+                        <div class="agency-card add-card" @click="startCreateLine">+ Create Line</div>
+                    </div>
+                </div>
+
+                <div class="split-layout" v-if="store.lineMode !== 'grid'">
+                    <div class="split-left">
+                        <div class="header-actions" style="justify-content: space-between;">
+                            <button class="btn btn-outline" @click="store.lineMode = 'grid'">← Back</button>
+                            <button class="btn" @click="saveLine" :disabled="!store.activeLine.route_short_name">Save Line</button>
+                        </div>
+                        
+                        <h2 style="margin-top:0;">Line Details</h2>
+                        <div class="card">
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label>route_short_name</label>
+                                <input v-model="store.activeLine.route_short_name" @focus="triggerLineField(-1)">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label>agency_id</label>
+                                <select v-model="store.activeLine.agency_id" style="padding:10px; border-radius:6px; border:1px solid var(--border);">
+                                    <option value="">-- No specific agency --</option>
+                                    <option v-for="a in store.agencies" :key="a.agency_id" :value="a.agency_id">{{ a.agency_name }}</option>
+                                </select>
+                            </div>
+                            <div v-for="(field, index) in store.activeLine.dynamicFields" :key="index" class="dynamic-row">
+                                <select v-model="field.key">
+                                    <option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }}</option>
+                                </select>
+                                <select v-if="field.key === 'route_type'" v-model="field.value" style="flex:1;">
+                                    <option v-for="rt in routeTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option>
+                                </select>
+                                <input v-else v-model="field.value" @focus="triggerLineField(index)" style="flex: 1;">
+                                <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeLine.dynamicFields.splice(index, 1)">✕</button>
+                            </div>
+                        </div>
+
+                        <h2>Journey Pattern</h2>
+                        <div class="direction-toggle">
+                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
+                        </div>
+                        <div class="card" style="background: #f8fafc;">
+                            <div class="coord-input-row">
+                                <input v-model="coordInput" placeholder="48.5448150N, 15.6792536E" style="flex:1;">
+                                <button class="btn" @click="addStopFromCoords">Add</button>
+                            </div>
+                            <select v-model="selectedExistingStop" @change="addExistingStopToPattern" style="width:100%; padding:10px; margin-bottom: 24px;">
+                                <option value="">-- Or select existing stop --</option>
+                                <option v-for="s in store.stops" :key="s.stop_id" :value="s.stop_id">{{ s.stop_name }}</option>
+                            </select>
+                            
+                            <h4>Sequence (Dir: {{ store.activeDirection }})</h4>
+                            <div v-for="(pStop, idx) in store.activeLine.patterns[store.activeDirection]" :key="idx" class="stop-sequence-item">
+                                <div class="stop-number">{{ idx + 1 }}</div>
+                                <div class="stop-details">
+                                    <div style="font-weight:600;">{{ getStopName(pStop.stop_id) }}</div>
+                                    <div style="font-size:0.75rem;">{{ pStop.stop_id }}</div>
+                                </div>
+                                <div><label style="font-size:0.7rem;">+ Min</label><input type="number" v-model="pStop.timeOffset" class="time-offset"></div>
+                                <button class="btn btn-danger" @click="store.activeLine.patterns[store.activeDirection].splice(idx, 1)">✕</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="split-right"><div id="map-container"></div></div>
+                </div>
+            </div>
+
+            <div class="view-container" v-show="['Import', 'Stops', 'Trips', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
-                <p style="color: #64748b;">This section is under construction.</p>
+                <p>This section is under construction.</p>
             </div>
         </main>
     </div>
-
-    <!-- Modulová aplikace (zůstává ve stejném adresáři) -->
+    
+    <script src="https://unpkg.com/maplibre-gl@3.x/dist/maplibre-gl.js"></script>
     <script type="module" src="./app.js"></script>
 </body>
 </html>
