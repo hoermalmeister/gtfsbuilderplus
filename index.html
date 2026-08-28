@@ -196,18 +196,6 @@
                                 <input v-model="store.selectedAgency[attr.key]" :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
                             </div>
                         </div>
-                        
-                        <!-- Navrácený blok pro Custom Fields -->
-                        <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
-                        <div class="flex-between">
-                            <h3 style="margin: 0;">Custom Fields</h3>
-                            <button class="btn btn-outline" @click="addCustomField(store.selectedAgency.customFields)">+ Add Field</button>
-                        </div>
-                        <div v-for="(field, fIndex) in store.selectedAgency.customFields" :key="fIndex" class="custom-field-row">
-                            <input v-model="field.key" placeholder="Key" style="flex: 1;">
-                            <input v-model="field.value" placeholder="Value" style="flex: 2;">
-                            <button class="btn btn-danger" @click="store.selectedAgency.customFields.splice(fIndex, 1)">✕</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -254,8 +242,8 @@
 
                         <h2>Journey Pattern</h2>
                         <div class="direction-toggle">
-                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound</div>
-                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Dir 0)</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Dir 1)</div>
                         </div>
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
@@ -535,7 +523,7 @@
                             
                             <div class="coord-input-row" style="margin-top: 16px;">
                                 <select v-model="store.newTripStopId" style="flex: 1;">
-                                    <option value="">-- Add Stop to Trip (Závlek) --</option>
+                                    <option value="">-- Add Stop to Trip (Detour) --</option>
                                     <option v-for="s in store.stops" :key="s.stop_id" :value="s.stop_id">{{ s.stop_name }}</option>
                                 </select>
                                 <button class="btn" @click="addStopToTrip" :disabled="!store.newTripStopId">+ Add</button>
@@ -549,7 +537,6 @@
             <div class="view-container-full" v-show="store.currentView === 'Transfers'">
                 <h1>Transfers</h1>
                 
-                <!-- Add New Transfer Panel -->
                 <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe; margin-bottom: 24px;">
                     <h3 style="margin-top: 0; color: #1e3a8a;">Add New Transfer</h3>
                     <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr; margin-bottom: 12px;">
@@ -619,7 +606,6 @@
                     </div>
                 </div>
 
-                <!-- Existing Transfers List -->
                 <div class="card" style="overflow-x: auto; padding: 0;">
                     <table class="transfers-table">
                         <thead>
