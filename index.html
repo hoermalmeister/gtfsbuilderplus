@@ -108,6 +108,25 @@
 }
 .dynamic-row select:focus { outline: none; border-color: var(--primary); }
 .header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
+
+        /* Split View & Map */
+.split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
+.split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
+.split-right { width: 50%; position: relative; background: #e2e8f0; }
+#map-container { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+
+/* Direction Toggle */
+.direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
+.dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; transition: 0.2s; }
+.dir-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+
+/* Stops Sequence */
+.stop-sequence-item { display: flex; gap: 12px; align-items: center; background: white; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
+.stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
+.stop-details { flex: 1; }
+.time-offset { width: 70px; text-align: right; }
+
+.coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; }
     </style>
 </head>
 <body>
@@ -295,7 +314,121 @@
         </div>
     </div>
 </div>
+<!-- AGENCIES VIEW (Zůstává vizuálně stejné, zkráceno pro přehlednost, nech svůj kód pro Agencies) -->
+<div class="view-container" v-show="store.currentView === 'Agencies' || store.currentView === 'Feed info'">
+    <!-- Tady ponech svůj stávající kód pro Feed info a Agencies -->
+    <h1 v-if="store.currentView === 'Feed info'">Feed Information (Oříznuto pro náhled - nech svůj kód)</h1>
+    <h1 v-if="store.currentView === 'Agencies'">Agencies (Oříznuto pro náhled - nech svůj kód)</h1>
+</div>
 
+<!-- LINES VIEW -->
+<div v-show="store.currentView === 'Lines'" style="height: 100%;">
+    
+    <!-- GRID VIEW -->
+    <div class="view-container" v-if="store.lineMode === 'grid'">
+        <div class="header-actions">
+            <h1 style="margin: 0;">Lines (Routes)</h1>
+        </div>
+        <div class="agencies-grid">
+            <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openLine(line)">
+                <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
+                <p>{{ line.route_long_name || 'No long name' }}</p>
+            </div>
+            <div class="agency-card add-card" @click="startCreateLine">
+                + Create Line
+            </div>
+        </div>
+    </div>
+
+    <!-- CREATE/EDIT SPLIT VIEW -->
+    <div class="split-layout" v-if="store.lineMode !== 'grid'">
+        <!-- LEFT HALF: Data -->
+        <div class="split-left">
+            <div class="header-actions" style="justify-content: space-between;">
+                <button class="btn btn-outline" @click="store.lineMode = 'grid'">← Back</button>
+                <button class="btn" @click="saveLine" :disabled="!store.activeLine.route_short_name">Save Line</button>
+            </div>
+            
+            <h2 style="margin-top:0;">Line Details</h2>
+            <div class="card">
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label>route_short_name <span class="badge badge-req">Required</span></label>
+                    <input v-model="store.activeLine.route_short_name" placeholder="e.g. 10, A, Blue" @focus="triggerLineField(-1)">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label>agency_id <span class="badge badge-opt">Optional</span></label>
+                    <select v-model="store.activeLine.agency_id" style="padding:10px; border-radius:6px; border:1px solid var(--border);">
+                        <option value="">-- No specific agency --</option>
+                        <option v-for="a in store.agencies" :key="a.agency_id" :value="a.agency_id">{{ a.agency_name }}</option>
+                    </select>
+                </div>
+
+                <div v-for="(field, index) in store.activeLine.dynamicFields" :key="index" class="dynamic-row">
+                    <select v-model="field.key">
+                        <option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">
+                            {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
+                        </option>
+                    </select>
+                    
+                    <!-- Dropdown pro route_type (0-12) -->
+                    <select v-if="field.key === 'route_type'" v-model="field.value" style="flex:1;">
+                        <option v-for="rt in routeTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option>
+                    </select>
+                    
+                    <input v-else v-model="field.value" placeholder="Value..." @focus="triggerLineField(index)" style="flex: 1;">
+                    <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeLine.dynamicFields.splice(index, 1)">✕</button>
+                </div>
+            </div>
+
+            <hr style="border:0; border-top: 1px solid var(--border); margin: 32px 0;">
+
+            <!-- ROUTING & STOPS SEQUENCE -->
+            <h2>Journey Pattern</h2>
+            <div class="direction-toggle">
+                <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
+                <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
+            </div>
+
+            <div class="card" style="background: #f8fafc;">
+                <h4>Add Stop</h4>
+                <p style="font-size:0.85rem; color:#64748b;">Click on the map to create a stop, select an existing one, or paste coordinates.</p>
+                <div class="coord-input-row">
+                    <input v-model="coordInput" placeholder="48.5448150N, 15.6792536E" style="flex:1;">
+                    <button class="btn" @click="addStopFromCoords">Add from Coords</button>
+                </div>
+                
+                <select v-model="selectedExistingStop" @change="addExistingStopToPattern" style="width:100%; padding:10px; margin-bottom: 24px;">
+                    <option value="">-- Or select existing stop --</option>
+                    <option v-for="s in store.stops" :key="s.stop_id" :value="s.stop_id">{{ s.stop_name }} ({{s.stop_id}})</option>
+                </select>
+
+                <h4>Stop Sequence (Direction: {{ store.activeDirection }})</h4>
+                <div v-for="(pStop, idx) in store.activeLine.patterns[store.activeDirection]" :key="idx" class="stop-sequence-item">
+                    <div class="stop-number">{{ idx + 1 }}</div>
+                    <div class="stop-details">
+                        <div style="font-weight:600;">{{ getStopName(pStop.stop_id) }}</div>
+                        <div style="font-size:0.75rem; color:#64748b;">{{ pStop.stop_id }}</div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.7rem; display:block;">+ Min</label>
+                        <input type="number" v-model="pStop.timeOffset" class="time-offset" min="0">
+                    </div>
+                    <button class="btn btn-danger" @click="store.activeLine.patterns[store.activeDirection].splice(idx, 1)">✕</button>
+                </div>
+                <div v-if="!store.activeLine.patterns[store.activeDirection].length" style="color:#64748b; font-size:0.9rem;">
+                    No stops in this direction yet.
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT HALF: Map -->
+        <div class="split-right">
+            <!-- MapLibre kontejner -->
+            <div id="map-container"></div>
+        </div>
+    </div>
+</div>
             <!-- Zástupné prázdné views pro ostatní záložky -->
             <div class="view-container" v-if="['Import', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
