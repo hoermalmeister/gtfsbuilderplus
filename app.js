@@ -19,7 +19,7 @@ const routeAttributes = sortAttrs([
 ]);
 
 const stopAttributes = sortAttrs([
-    { key: 'stop_code', required: false }, { key: 'stop_desc', required: false },
+    { key: 'stop_code', required: false }, { key: 'stop_desc', required: false }, { key: 'tts_stop_name', required: false },
     { key: 'zone_id', required: false }, { key: 'stop_url', required: false },
     { key: 'location_type', required: false }, { key: 'parent_station', required: false },
     { key: 'stop_timezone', required: false }, { key: 'wheelchair_boarding', required: false },
@@ -42,7 +42,7 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 // --- HLAVNÍ STAV APLIKACE ---
 const store = reactive({
     currentView: 'Feed info',
-    menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Trips', 'Shapes', 'Export'],
+    menuItems: ['Import', 'Feed info', 'Agencies', 'Lines', 'Stops', 'Calendar', 'Trips', 'Transfers', 'Shapes', 'Export'],
     
     feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', default_lang: '', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
     
@@ -56,7 +56,10 @@ const store = reactive({
     tripGenConfig: { 
         '0': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' }, 
         '1': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' } 
-    }
+    },
+
+    transfers: [],
+    newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' }
 });
 
 const app = createApp({
@@ -117,7 +120,6 @@ const app = createApp({
         };
         const getStopName = (id) => { const s = store.stops.find(s => s.stop_id === id); return s ? s.stop_name : 'Unknown'; };
         
-        // Zde aplikujeme uložení defaultních 2 minut (120 s) při vytvoření v Lines
         const addExistingStopToPattern = () => {
             if (selectedExistingStop.value) { store.activeLine.patterns[store.activeDirection].push({ stop_id: selectedExistingStop.value, timeOffsetMins: 2, timeOffsetSecs: 0 }); selectedExistingStop.value = ''; }
         };
@@ -154,7 +156,6 @@ const app = createApp({
                               .sort((a, b) => a.stop_times[0]?.departure_time.localeCompare(b.stop_times[0]?.departure_time));
         };
         
-        // Převede sekundy (např. 90000) na string HH:MM:SS (25:00:00)
         const formatGtfsTime = (totalSeconds) => {
             const h = Math.floor(totalSeconds / 3600);
             const m = Math.floor((totalSeconds % 3600) / 60);
@@ -162,7 +163,6 @@ const app = createApp({
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         };
         
-        // Převede GTFS string HH:MM:SS na celkové sekundy pro kalkulaci
         const timeStringToSeconds = (timeStr) => {
             if (!timeStr) return 0;
             const parts = timeStr.split(':').map(Number);
@@ -201,19 +201,30 @@ const app = createApp({
             
             let currentSecs = timeStringToSeconds(config.start_time);
             const endSecs = timeStringToSeconds(config.end_time);
-            const intervalSecs = (Number(config.interval) || 0) * 60;
+            const intervalSecs = timeStringToSeconds(config.interval); // HH:MM:SS format pro interval
 
-            if (intervalSecs <= 0) { alert('Interval must be greater than 0 minutes.'); return; }
+            if (intervalSecs <= 0) { alert('Interval must be greater than 0.'); return; }
             if (currentSecs > endSecs) { alert('Start time must be before end time.'); return; }
 
             while (currentSecs <= endSecs) {
                 store.trips.push(createTripObject(dir, currentSecs, config.service_id));
                 currentSecs += intervalSecs;
             }
-            config.start_time = ''; config.end_time = '';
+            config.start_time = ''; config.end_time = ''; config.interval = '';
         };
 
         const deleteTrip = (internalId) => { if(confirm('Delete trip?')) store.trips = store.trips.filter(t => t._internal_id !== internalId); };
+
+        // --- TRANSFERS ---
+        const getTripsForRoute = (routeId) => store.trips.filter(t => t.route_id === routeId);
+        const getStopsForTrip = (tripId) => {
+            const t = store.trips.find(x => x.trip_id === tripId);
+            return t ? t.stop_times.map(st => ({ stop_id: st.stop_id })) : [];
+        };
+        const addTransfer = () => {
+            store.transfers.push({ ...store.newTransfer });
+            store.newTransfer = { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' };
+        };
 
         // --- MAP LOGIC ---
         const initMap = (containerId) => {
@@ -244,20 +255,29 @@ const app = createApp({
                     }
                 });
             } else if (store.currentView === 'Stops') {
-                store.stops.forEach(s => {
-                    const el = document.createElement('div'); el.className = 'stop-icon';
-                    markers.push(new maplibregl.Marker({element: el}).setLngLat([parseFloat(s.stop_lon), parseFloat(s.stop_lat)]).addTo(map));
-                });
+                if (store.stopMode === 'grid') {
+                    // Kreslíme všechny stanice v grid pohledu
+                    store.stops.forEach(s => {
+                        const el = document.createElement('div'); el.className = 'stop-icon'; el.title = s.stop_name;
+                        markers.push(new maplibregl.Marker({element: el}).setLngLat([parseFloat(s.stop_lon), parseFloat(s.stop_lat)]).addTo(map));
+                    });
+                } else if (store.activeStop && store.activeStop.stop_lat) {
+                    // Kreslíme pouze aktivní stanici v detailu
+                    const el = document.createElement('div'); el.className = 'stop-icon'; el.style.background = '#2563eb';
+                    markers.push(new maplibregl.Marker({element: el}).setLngLat([parseFloat(store.activeStop.stop_lon), parseFloat(store.activeStop.stop_lat)]).addTo(map));
+                }
             }
             if (markers.length > 1) {
                 const b = new maplibregl.LngLatBounds(); markers.forEach(m => b.extend(m.getLngLat())); map.fitBounds(b, { padding: 50 });
+            } else if (markers.length === 1 && store.currentView === 'Stops') {
+                map.flyTo({ center: markers[0].getLngLat(), zoom: 15 });
             }
         };
 
-        watch(() => [store.currentView, store.lineMode, store.stopMode, store.activeDirection, store.activeLine?.patterns, store.stops], async () => {
+        watch(() => [store.currentView, store.lineMode, store.stopMode, store.activeDirection, store.activeLine?.patterns, store.stops, store.activeStop?.stop_lat], async () => {
             await nextTick();
             const inLines = store.currentView === 'Lines' && store.lineMode !== 'grid';
-            const inStops = store.currentView === 'Stops' && store.stopMode !== 'grid';
+            const inStops = store.currentView === 'Stops';
             
             if (inLines || inStops) {
                 const containerId = inLines ? 'map-container-lines' : 'map-container-stops';
@@ -276,7 +296,8 @@ const app = createApp({
             startCreateLine, openLine, saveLine, getAvailableLineAttributes, triggerLineField, getStopName, addExistingStopToPattern, addStopFromCoords,
             startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField,
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
-            openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, deleteTrip
+            openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, deleteTrip,
+            getTripsForRoute, getStopsForTrip, addTransfer
         };
     }
 });
