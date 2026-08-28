@@ -12,27 +12,30 @@
             --bg-dark: #0f172a; --bg-nav: #1e293b;
             --text-main: #334155; --border: #e2e8f0; --bg-light: #f8fafc;
         }
-        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Inter', sans-serif; background-color: var(--bg-light); color: var(--text-main); }
-        #sidebar { width: 260px; background-color: var(--bg-dark); color: white; display: flex; flex-direction: column; z-index: 10; }
+        body { margin: 0; padding: 0; display: flex; height: 100vh; font-family: 'Inter', sans-serif; background-color: var(--bg-light); color: var(--text-main); overflow: hidden; }
+        #sidebar { width: 260px; background-color: var(--bg-dark); color: white; display: flex; flex-direction: column; z-index: 10; flex-shrink: 0; }
         .brand { padding: 24px; font-size: 1.25rem; font-weight: 600; border-bottom: 1px solid #334155; }
-        .nav-items { flex-grow: 1; padding: 16px 12px; }
+        .nav-items { flex-grow: 1; padding: 16px 12px; overflow-y: auto; }
         .nav-btn { width: 100%; text-align: left; background: none; border: none; color: #94a3b8; padding: 12px 16px; margin-bottom: 4px; border-radius: 8px; font-size: 0.95rem; cursor: pointer; transition: all 0.2s; font-weight: 500; }
         .nav-btn:hover { background-color: var(--bg-nav); color: white; }
         .nav-btn.active { background-color: var(--primary); color: white; }
 
-        #content { flex-grow: 1; overflow-y: auto; padding: 40px; }
-        .view-container { max-width: 800px; margin: 0 auto; }
+        #content { flex-grow: 1; overflow-y: auto; padding: 40px; position: relative; }
+        .view-container { max-width: 800px; margin: 0 auto; padding-bottom: 40px; }
         h1 { margin-top: 0; font-size: 1.8rem; color: #0f172a; }
-        .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px; }
+        h2 { font-size: 1.4rem; color: #0f172a; margin-top: 0; }
+        h3 { font-size: 1.1rem; color: #0f172a; margin-top: 0; }
         
+        .card { background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 24px; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
         .form-group { display: flex; flex-direction: column; }
         label { font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 6px; }
         input, select { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; font-family: inherit; }
         input:focus, select:focus { outline: none; border-color: var(--primary); }
         
-        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; }
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; transition: 0.2s; }
         .btn:hover { background: var(--primary-hover); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-main); }
         .btn-danger { background: #ef4444; color: white; padding: 6px 12px; font-size: 0.85rem; }
 
@@ -40,8 +43,9 @@
         .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
         
         .agencies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
-        .agency-card { background: white; padding: 24px 16px; border-radius: 12px; cursor: pointer; border: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; height: 140px; box-sizing: border-box; }
-        .agency-card h3 { margin: 0 0 8px 0; font-size: 1.1rem; color: #0f172a; }
+        .agency-card { background: white; padding: 24px 16px; border-radius: 12px; cursor: pointer; border: 1px solid var(--border); display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; height: 140px; box-sizing: border-box; transition: 0.2s; }
+        .agency-card:hover { border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); transform: translateY(-2px); }
+        .agency-card h3 { margin: 0 0 8px 0; }
         .agency-card p { margin: 0; font-size: 0.85rem; color: #64748b; }
         .add-card { border: 2px dashed #cbd5e1; background: transparent; color: #64748b; font-weight: 600; }
         
@@ -53,25 +57,26 @@
         .dynamic-row select { width: 35%; cursor: pointer; }
         .header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
 
-        /* Splits */
-        .split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
+        /* Split Layouts */
+        .split-layout { display: flex; height: calc(100vh - 80px); margin: -40px; position: relative; }
         .split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
         .split-right { width: 50%; position: relative; background: #e2e8f0; }
         .map-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
 
-        .split-vertical { display: flex; flex-direction: column; height: 100vh; margin: -40px; }
+        .split-vertical { display: flex; flex-direction: column; height: calc(100vh - 80px); margin: -40px; }
         .split-top, .split-bottom { flex: 1; padding: 40px; overflow-y: auto; }
         .split-bottom { background: #e2e8f0; border-top: 1px solid var(--border); }
 
         .direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
-        .dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; }
+        .dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; transition: 0.2s; }
         .dir-btn.active { background: white; color: var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        
         .stop-sequence-item { display: flex; gap: 12px; align-items: center; background: white; padding: 12px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; }
         .stop-number { background: var(--primary); color: white; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 0.8rem; font-weight: bold; }
         .stop-icon { background: #e74c3c; width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; cursor: pointer; }
         .stop-details { flex: 1; }
         .time-offset { width: 70px; text-align: right; }
-        .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; }
+        .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
     </style>
 </head>
 <body>
@@ -86,6 +91,7 @@
         </nav>
 
         <main id="content">
+            
             <!-- FEED INFO VIEW -->
             <div class="view-container" v-show="store.currentView === 'Feed info'">
                 <h1>Feed Information</h1>
@@ -231,10 +237,10 @@
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
                                 <input v-model="coordStopName" placeholder="Stop Name (Optional)" style="flex:1;">
-                                <input v-model="coordInput" placeholder="48.5448150N, 15.6792536E" style="flex:1;">
+                                <input v-model="coordInput" placeholder="48.544N, 15.679E" style="flex:1;">
                                 <button class="btn" @click="addStopFromCoords">Add</button>
                             </div>
-                            <select v-model="selectedExistingStop" @change="addExistingStopToPattern" style="width:100%; padding:10px; margin-bottom: 24px;">
+                            <select v-model="selectedExistingStop" @change="addExistingStopToPattern" style="width:100%; padding:10px; margin-bottom: 24px; border-radius: 6px; border: 1px solid var(--border);">
                                 <option value="">-- Or select existing stop --</option>
                                 <option v-for="s in store.stops" :key="s.stop_id" :value="s.stop_id">{{ s.stop_name }}</option>
                             </select>
@@ -304,7 +310,6 @@
 
             <!-- CALENDAR VIEW -->
             <div class="split-vertical" v-show="store.currentView === 'Calendar'">
-                <!-- TOP: calendar.txt -->
                 <div class="split-top">
                     <div class="view-container" v-if="store.calendarMode === 'grid'">
                         <h1 style="margin-bottom: 24px;">Calendar (Services)</h1>
@@ -344,7 +349,6 @@
                     </div>
                 </div>
 
-                <!-- BOTTOM: calendar_dates.txt -->
                 <div class="split-bottom">
                     <div class="view-container">
                         <h2 style="margin-top:0;">Calendar Exceptions (calendar_dates.txt)</h2>
@@ -380,8 +384,89 @@
                 </div>
             </div>
 
-            <!-- OTHER VIEWS -->
-            <div class="view-container" v-show="['Import', 'Trips', 'Shapes', 'Export'].includes(store.currentView)">
+            <!-- TRIPS VIEW -->
+            <div v-show="store.currentView === 'Trips'" style="height: 100%;">
+                <div class="view-container" v-if="store.tripMode === 'grid'">
+                    <h1 style="margin-bottom: 24px;">Trips (Select a Line)</h1>
+                    <div class="agencies-grid">
+                        <div class="agency-card" v-for="line in store.lines" :key="line._internal_id" @click="openTripManager(line)">
+                            <h3 style="color: var(--primary); font-size: 1.4rem;">{{ line.route_short_name }}</h3>
+                            <p>{{ line.route_long_name || 'Manage Trips' }}</p>
+                        </div>
+                    </div>
+                    <p v-if="!store.lines.length" style="color: #64748b; text-align: center; margin-top: 40px;">No lines available. Create a Line first.</p>
+                </div>
+
+                <div class="split-vertical" v-if="store.tripMode === 'details' && store.activeTripRoute">
+                    <div class="header-actions" style="padding: 20px 40px 0; background: var(--bg-light); margin-bottom: -40px; z-index: 5;">
+                        <button class="btn btn-outline" @click="store.tripMode = 'grid'">← Back to Lines</button>
+                        <h2 style="margin: 0; color: var(--primary);">Line {{ store.activeTripRoute.route_short_name }} Trips</h2>
+                    </div>
+
+                    <div class="split-top" style="padding-top: 60px;">
+                        <h3>Outbound (Tam) - Dir 0</h3>
+                        <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
+                            <div class="coord-input-row">
+                                <select v-model="store.tripGenConfig['0'].service_id" style="flex: 2;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <input type="time" v-model="store.tripGenConfig['0'].start_time" style="flex: 1;">
+                                <button class="btn" @click="generateTrip('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].service_id">Generate Trip</button>
+                            </div>
+                        </div>
+
+                        <div v-for="trip in getTripsForRouteAndDir('0')" :key="trip._internal_id" class="card" style="padding: 16px; margin-bottom: 12px;">
+                            <div class="flex-between">
+                                <div><strong>Departs: {{ trip.stop_times[0]?.departure_time }}</strong> <span class="badge badge-opt">{{ trip.service_id }}</span></div>
+                                <button class="btn btn-outline" @click="trip._expanded = !trip._expanded">{{ trip._expanded ? 'Hide Details' : 'Edit Times' }}</button>
+                            </div>
+                            <div v-if="trip._expanded" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                                <div v-for="st in trip.stop_times" :key="st.stop_sequence" class="coord-input-row" style="margin-bottom: 8px;">
+                                    <div class="stop-number" style="width: 20px; height: 20px; font-size: 0.7rem;">{{ st.stop_sequence }}</div>
+                                    <span style="flex: 2; font-size: 0.9rem;">{{ getStopName(st.stop_id) }}</span>
+                                    <input v-model="st.arrival_time" style="width: 100px; padding: 6px;" title="Arrival HH:MM:SS">
+                                    <input v-model="st.departure_time" style="width: 100px; padding: 6px;" title="Departure HH:MM:SS">
+                                </div>
+                                <div style="text-align: right; margin-top: 12px;"><button class="btn btn-danger" @click="deleteTrip(trip._internal_id)">Delete Trip</button></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="split-bottom">
+                        <h3>Inbound (Zpět) - Dir 1</h3>
+                        <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
+                            <div class="coord-input-row">
+                                <select v-model="store.tripGenConfig['1'].service_id" style="flex: 2;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <input type="time" v-model="store.tripGenConfig['1'].start_time" style="flex: 1;">
+                                <button class="btn" @click="generateTrip('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].service_id">Generate Trip</button>
+                            </div>
+                        </div>
+
+                        <div v-for="trip in getTripsForRouteAndDir('1')" :key="trip._internal_id" class="card" style="padding: 16px; margin-bottom: 12px;">
+                            <div class="flex-between">
+                                <div><strong>Departs: {{ trip.stop_times[0]?.departure_time }}</strong> <span class="badge badge-opt">{{ trip.service_id }}</span></div>
+                                <button class="btn btn-outline" @click="trip._expanded = !trip._expanded">{{ trip._expanded ? 'Hide Details' : 'Edit Times' }}</button>
+                            </div>
+                            <div v-if="trip._expanded" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 16px;">
+                                <div v-for="st in trip.stop_times" :key="st.stop_sequence" class="coord-input-row" style="margin-bottom: 8px;">
+                                    <div class="stop-number" style="width: 20px; height: 20px; font-size: 0.7rem;">{{ st.stop_sequence }}</div>
+                                    <span style="flex: 2; font-size: 0.9rem;">{{ getStopName(st.stop_id) }}</span>
+                                    <input v-model="st.arrival_time" style="width: 100px; padding: 6px;">
+                                    <input v-model="st.departure_time" style="width: 100px; padding: 6px;">
+                                </div>
+                                <div style="text-align: right; margin-top: 12px;"><button class="btn btn-danger" @click="deleteTrip(trip._internal_id)">Delete Trip</button></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- PLACEHOLDERS -->
+            <div class="view-container" v-show="['Import', 'Shapes', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
                 <p>This section is under construction.</p>
             </div>
