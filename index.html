@@ -80,6 +80,34 @@
         /* Obal pro mapu, skrytý pokud nejsme v příslušné záložce */
         #map-container { display: none; width: 100%; height: 100%; }
         #map-container.active { display: block; }
+        /* Agencies Grid & Cards */
+.agencies-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+.agency-card {
+    background: white; padding: 24px 16px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--border); transition: all 0.2s;
+    display: flex; flex-direction: column; justify-content: center; align-items: center;
+    text-align: center; height: 140px; box-sizing: border-box;
+}
+.agency-card h3 { margin: 0 0 8px 0; font-size: 1.1rem; color: #0f172a; }
+.agency-card p { margin: 0; font-size: 0.85rem; color: #64748b; }
+.agency-card:hover { border-color: var(--primary); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); transform: translateY(-2px); }
+
+.add-card { border: 2px dashed #cbd5e1; background: transparent; color: #64748b; font-weight: 600; }
+.add-card:hover { border-color: var(--primary); color: var(--primary); background: #eff6ff; }
+
+/* Badges for Required/Optional */
+.badge { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+.badge-req { background: #fee2e2; color: #b91c1c; }
+.badge-opt { background: #f1f5f9; color: #64748b; }
+
+/* Dynamic Row for creating Agency */
+.dynamic-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+.dynamic-row select { 
+    width: 35%; padding: 10px; border: 1px solid var(--border); border-radius: 6px; 
+    font-family: inherit; font-size: 0.95rem; background-color: #f8fafc; cursor: pointer;
+}
+.dynamic-row select:focus { outline: none; border-color: var(--primary); }
+.header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
     </style>
 </head>
 <body>
@@ -158,55 +186,103 @@
             </div>
 
             <!-- AGENCIES VIEW -->
-            <div class="view-container" v-if="store.currentView === 'Agencies'">
-                <div class="flex-between">
-                    <h1>Agencies</h1>
-                    <button class="btn" @click="addAgency">+ New Agency</button>
-                </div>
-                
-                <div v-for="(agency, aIndex) in store.agencies" :key="agency._internal_id" class="card">
-                    <div class="flex-between" style="border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px;">
-                        <h3 style="margin: 0; color: #0f172a;">Agency #{{ aIndex + 1 }}</h3>
-                        <button class="btn btn-danger" @click="store.agencies.splice(aIndex, 1)">Delete Agency</button>
-                    </div>
-                    
-                    <div class="form-grid">
-                        <div class="form-group">
-                            <label>Agency ID (optional)</label>
-                            <input v-model="agency.agency_id" placeholder="A1">
-                        </div>
-                        <div class="form-group">
-                            <label>Agency Name</label>
-                            <input v-model="agency.agency_name" placeholder="City Transit">
-                        </div>
-                        <div class="form-group">
-                            <label>Agency URL</label>
-                            <input v-model="agency.agency_url" placeholder="https://...">
-                        </div>
-                        <div class="form-group">
-                            <label>Timezone</label>
-                            <input v-model="agency.agency_timezone" placeholder="Europe/London">
-                        </div>
-                    </div>
+<div class="view-container" v-if="store.currentView === 'Agencies'" style="max-width: 900px;">
+    
+    <!-- 1. GRID VIEW -->
+    <div v-if="store.agencyMode === 'grid'">
+        <h1 style="margin-bottom: 24px;">Agencies</h1>
+        <div class="agencies-grid">
+            <div class="agency-card" v-for="agency in store.agencies" :key="agency._internal_id" @click="openAgency(agency)">
+                <h3>{{ agency.agency_name || 'Unnamed Agency' }}</h3>
+                <p>ID: {{ agency.agency_id }}</p>
+            </div>
+            <div class="agency-card add-card" @click="startCreateAgency">
+                + Add Agency
+            </div>
+        </div>
+    </div>
 
-                    <!-- Custom Fields for this Agency -->
-                    <div style="margin-top: 24px; background: var(--bg-light); padding: 16px; border-radius: 8px;">
-                        <div class="flex-between" style="margin-bottom: 12px;">
-                            <label style="margin: 0;">Custom Fields</label>
-                            <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.8rem;" @click="addCustomField(agency.customFields)">+ Add</button>
-                        </div>
-                        <div v-for="(field, fIndex) in agency.customFields" :key="fIndex" class="custom-field-row">
-                            <input v-model="field.key" placeholder="Key (e.g. agency_phone)" style="flex: 1; padding: 6px;">
-                            <input v-model="field.value" placeholder="Value" style="flex: 2; padding: 6px;">
-                            <button class="btn btn-danger" style="padding: 6px 10px;" @click="agency.customFields.splice(fIndex, 1)">✕</button>
-                        </div>
-                    </div>
+    <!-- 2. CREATE NEW AGENCY VIEW -->
+    <div v-if="store.agencyMode === 'create'">
+        <div class="header-actions">
+            <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
+            <h2 style="margin: 0;">Create New Agency</h2>
+        </div>
+        
+        <div class="card">
+            <!-- Jméno je vždy první a fixní -->
+            <div class="form-group" style="margin-bottom: 16px;">
+                <label>Agency Name <span class="badge badge-req">Required</span></label>
+                <input v-model="store.newAgency.agency_name" placeholder="e.g. City Transit" @focus="triggerNextField(-1)">
+            </div>
+
+            <!-- Dynamicky přidávaná pole -->
+            <div v-for="(field, index) in store.newAgency.dynamicFields" :key="index" class="dynamic-row">
+                <select v-model="field.key">
+                    <option v-for="opt in getAvailableAttributes(field.key)" :key="opt.key" :value="opt.key">
+                        {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
+                    </option>
+                </select>
+                <input v-model="field.value" placeholder="Enter value..." @focus="triggerNextField(index)" style="flex: 1;">
+                <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.newAgency.dynamicFields.splice(index, 1)">✕</button>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 16px;">
+            <button class="btn btn-outline" @click="store.agencyMode = 'grid'">Cancel</button>
+            <button class="btn" @click="saveNewAgency" :disabled="!store.newAgency.agency_name">Save Agency</button>
+        </div>
+    </div>
+
+    <!-- 3. EDIT AGENCY DETAILS VIEW -->
+    <div v-if="store.agencyMode === 'details' && store.selectedAgency">
+        <div class="header-actions" style="justify-content: space-between;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+                <button class="btn btn-outline" @click="store.agencyMode = 'grid'">← Back</button>
+                <h2 style="margin: 0;">{{ store.selectedAgency.agency_name }}</h2>
+            </div>
+            <button class="btn btn-danger" @click="deleteSelectedAgency">Delete Agency</button>
+        </div>
+
+        <div class="card">
+            <div class="form-grid">
+                <!-- ID je upravitelné až v detailech -->
+                <div class="form-group">
+                    <label>agency_id <span class="badge badge-req">Required*</span></label>
+                    <input v-model="store.selectedAgency.agency_id">
+                </div>
+                <div class="form-group">
+                    <label>agency_name <span class="badge badge-req">Required</span></label>
+                    <input v-model="store.selectedAgency.agency_name">
                 </div>
                 
-                <div v-if="store.agencies.length === 0" style="text-align: center; padding: 40px; color: #64748b;">
-                    No agencies defined. Add your first transit agency.
+                <!-- Generování všech standardních GTFS polí v detailech -->
+                <div class="form-group" v-for="attr in agencyAttributes" :key="attr.key">
+                    <label>
+                        {{ attr.key }} 
+                        <span :class="['badge', attr.required ? 'badge-req' : 'badge-opt']">
+                            {{ attr.required ? 'Required' : 'Optional' }}
+                        </span>
+                    </label>
+                    <input v-model="store.selectedAgency[attr.key]">
                 </div>
             </div>
+
+            <!-- Custom Fields pro stávajícího dopravce -->
+            <div style="margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px;">
+                <div class="flex-between" style="margin-bottom: 16px;">
+                    <h3 style="margin: 0;">Custom Fields</h3>
+                    <button class="btn btn-outline" @click="addCustomField(store.selectedAgency.customFields)">+ Add Field</button>
+                </div>
+                <div v-for="(field, fIndex) in store.selectedAgency.customFields" :key="fIndex" class="custom-field-row">
+                    <input v-model="field.key" placeholder="Custom Key" style="flex: 1;">
+                    <input v-model="field.value" placeholder="Value" style="flex: 2;">
+                    <button class="btn btn-danger" @click="store.selectedAgency.customFields.splice(fIndex, 1)">✕</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
             <!-- Zástupné prázdné views pro ostatní záložky -->
             <div class="view-container" v-if="['Import', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
