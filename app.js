@@ -1,4 +1,4 @@
-import { createApp, reactive, ref, computed, nextTick, watch } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+import { createApp, reactive, ref, computed, nextTick, watch, markRaw } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
 
 const sortAttrs = (arr) => arr.sort((a, b) => (a.required === b.required) ? 0 : a.required ? -1 : 1);
 
@@ -49,18 +49,25 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const store = reactive({
     currentView: 'Import',
     feedInfo: { feed_publisher_name: '', feed_publisher_url: '', feed_lang: 'en', default_lang: '', feed_start_date: '', feed_end_date: '', feed_version: '', feed_contact_email: '', feed_contact_url: '', customFields: [] },
+    
     agencyMode: 'grid', selectedAgency: null, agencies: [], newAgency: { agency_name: '', dynamicFields: [] },
     stopMode: 'grid', selectedStop: null, stops: [], activeStop: null,
     lineMode: 'grid', lines: [], activeLine: null, activeDirection: '0',
     calendarMode: 'grid', calendar: [], activeCalendar: null, calendarDates: [],
     newException: { service_id: '', date: '', exception_type: '1' },
+
     trips: [], tripMode: 'grid', activeTripRoute: null, activeTripEdit: null,
-    tripGenConfig: { '0': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' }, '1': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' } },
+    tripGenConfig: { 
+        '0': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' }, 
+        '1': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' } 
+    },
     newTripStopId: '',
-    transfers: [], newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' },
+
+    transfers: [],
+    newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' },
+
     shapes: [], shapesSummary: [], brouterLoading: false, shapeGenConfig: { route_id: '', profile: 'car-fast' },
     
-    // Import
     isImporting: false, importMessage: '', extraFiles: []
 });
 
@@ -135,7 +142,6 @@ const app = createApp({
                 let lat = parseFloat(match[1]); let lon = parseFloat(match[2]);
                 if (coordInput.value.toUpperCase().includes('S') && lat > 0) lat = -lat;
                 if (coordInput.value.toUpperCase().includes('W') && lon > 0) lon = -lon;
-                
                 const finalName = coordStopName.value.trim() || `Stop ${lat.toFixed(5)}`;
                 const newStop = { _internal_id: generateId(), stop_id: 'S_' + generateId().toUpperCase(), stop_name: finalName, stop_lat: lat.toFixed(7), stop_lon: lon.toFixed(7), dynamicFields: [] };
                 store.stops.push(newStop);
@@ -151,7 +157,7 @@ const app = createApp({
         const deleteCalendar = () => { if(confirm('Delete?')) { store.calendar = store.calendar.filter(c => c._internal_id !== store.activeCalendar._internal_id); store.calendarMode = 'grid'; } };
         const addException = () => { store.calendarDates.push({ ...store.newException }); store.newException.date = ''; };
 
-        // --- TRIPS & TIME LOGIC ---
+        // --- TRIPS ---
         const openTripManager = (line) => { store.activeTripRoute = line; store.tripMode = 'details'; };
         const getTripsForRouteAndDir = (dir) => {
             if (!store.activeTripRoute) return [];
@@ -177,12 +183,14 @@ const app = createApp({
             });
             return { _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: serviceId, direction_id: dir, stop_times: stopTimes, dynamicFields: [] };
         };
+        
         const generateTrip = (dir) => {
             const config = store.tripGenConfig[dir];
             if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
-            store.trips.push(createTripObject(dir, timeStringToSeconds(config.start_time), config.service_id));
+            store.trips.push(markRaw(createTripObject(dir, timeStringToSeconds(config.start_time), config.service_id)));
             config.start_time = ''; 
         };
+        
         const generateBatchTrips = (dir) => {
             const config = store.tripGenConfig[dir];
             if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
@@ -192,14 +200,27 @@ const app = createApp({
             if (intervalSecs <= 0) { alert('Interval must be > 0.'); return; }
             if (currentSecs > endSecs) { alert('Start time must be before end time.'); return; }
             while (currentSecs <= endSecs) {
-                store.trips.push(createTripObject(dir, currentSecs, config.service_id));
+                store.trips.push(markRaw(createTripObject(dir, currentSecs, config.service_id)));
                 currentSecs += intervalSecs;
             }
             config.start_time = ''; config.end_time = ''; config.interval = '';
         };
 
-        const openTripEdit = (trip) => { store.activeTripEdit = trip; store.tripMode = 'edit'; };
-        const saveTripEdit = () => { store.activeTripEdit.stop_times.forEach((st, idx) => st.stop_sequence = idx + 1); store.tripMode = 'details'; };
+        // Klonování z RAW stavu do reaktivního dočasného editoru
+        const openTripEdit = (trip) => { 
+            store.activeTripEdit = JSON.parse(JSON.stringify(trip)); 
+            store.tripMode = 'edit'; 
+        };
+        
+        const saveTripEdit = () => { 
+            store.activeTripEdit.stop_times.forEach((st, idx) => st.stop_sequence = idx + 1); 
+            const index = store.trips.findIndex(t => t._internal_id === store.activeTripEdit._internal_id);
+            if (index !== -1) {
+                store.trips[index] = markRaw(JSON.parse(JSON.stringify(store.activeTripEdit)));
+            }
+            store.tripMode = 'details'; 
+        };
+        
         const deleteTrip = (internalId) => { if(confirm('Delete trip?')) { store.trips = store.trips.filter(t => t._internal_id !== internalId); store.tripMode = 'details'; } };
         const getAvailableTripAttributes = (key) => tripAttributes.filter(attr => attr.key === key || !store.activeTripEdit.dynamicFields.map(f=>f.key).includes(attr.key));
         const triggerTripField = (index) => {
@@ -230,7 +251,7 @@ const app = createApp({
         };
         const addTransfer = () => { store.transfers.push({ ...store.newTransfer }); store.newTransfer = { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' }; };
 
-        // --- SHAPES GENERATION (BRouter) ---
+        // --- SHAPES ---
         const isRouteShapesComplete = (routeId) => {
             const routeTrips = store.trips.filter(t => t.route_id === routeId);
             if (routeTrips.length === 0) return false;
@@ -244,7 +265,6 @@ const app = createApp({
             const routeId = store.shapeGenConfig.route_id;
             const profile = store.shapeGenConfig.profile;
             const routeTrips = store.trips.filter(t => t.route_id === routeId);
-            
             if (routeTrips.length === 0) { alert('No trips found for this route.'); return; }
             store.brouterLoading = true;
             
@@ -291,13 +311,19 @@ const app = createApp({
                 }
                 
                 if (finalCoords.length > 0) {
-                    finalCoords.forEach((c, idx) => { store.shapes.push({ shape_id: shapeId, shape_pt_lat: c[1].toFixed(7), shape_pt_lon: c[0].toFixed(7), shape_pt_sequence: idx + 1 }); });
+                    const newShapes = [];
+                    finalCoords.forEach((c, idx) => { newShapes.push({ shape_id: shapeId, shape_pt_lat: c[1].toFixed(7), shape_pt_lon: c[0].toFixed(7), shape_pt_sequence: idx + 1 }); });
+                    store.shapes = markRaw([...store.shapes, ...newShapes]);
                     store.shapesSummary.push({ shape_id: shapeId, route_id: routeId, points_count: finalCoords.length, trips_count: group.trips.length });
                     
                     group.trips.forEach(trip => {
-                        let sf = trip.dynamicFields.find(f => f.key === 'shape_id');
-                        if (!sf) trip.dynamicFields.push({ key: 'shape_id', value: shapeId });
+                        let clone = JSON.parse(JSON.stringify(trip));
+                        let sf = clone.dynamicFields.find(f => f.key === 'shape_id');
+                        if (!sf) clone.dynamicFields.push({ key: 'shape_id', value: shapeId });
                         else sf.value = shapeId;
+                        
+                        const index = store.trips.findIndex(t => t._internal_id === clone._internal_id);
+                        if (index !== -1) store.trips[index] = markRaw(clone);
                     });
                 }
             }
@@ -307,21 +333,25 @@ const app = createApp({
 
         const deleteShape = (shapeId) => {
             if(confirm(`Delete Shape ${shapeId}?`)) {
-                store.shapes = store.shapes.filter(s => s.shape_id !== shapeId);
+                store.shapes = markRaw(store.shapes.filter(s => s.shape_id !== shapeId));
                 store.shapesSummary = store.shapesSummary.filter(s => s.shape_id !== shapeId);
                 store.trips.forEach(t => {
-                    t.dynamicFields = t.dynamicFields.filter(f => !(f.key === 'shape_id' && f.value === shapeId));
+                    let clone = JSON.parse(JSON.stringify(t));
+                    const origLen = clone.dynamicFields.length;
+                    clone.dynamicFields = clone.dynamicFields.filter(f => !(f.key === 'shape_id' && f.value === shapeId));
+                    if (clone.dynamicFields.length !== origLen) {
+                        const index = store.trips.findIndex(tr => tr._internal_id === clone._internal_id);
+                        if (index !== -1) store.trips[index] = markRaw(clone);
+                    }
                 });
                 updateMapData();
             }
         };
 
-        // --- IMPORT LOGIC (ZIP) ---
+        // --- IMPORT LOGIC (ZIP s Chunkingem a MarkRaw) ---
         const extractDynamic = (row, knownKeys) => {
             const dyn = [];
-            Object.keys(row).forEach(k => {
-                if(!knownKeys.includes(k) && row[k]) dyn.push({key: k, value: row[k]});
-            });
+            Object.keys(row).forEach(k => { if(!knownKeys.includes(k) && row[k]) dyn.push({key: k, value: row[k]}); });
             return dyn;
         };
 
@@ -329,69 +359,76 @@ const app = createApp({
             const file = event.target.files[0];
             if (!file) return;
             store.isImporting = true;
-            store.importMessage = 'Parsing ZIP file...';
+            store.importMessage = 'Rozbaluji ZIP a připravuji paměť...';
             try {
                 const zip = await window.JSZip.loadAsync(file);
                 const parsedData = {};
                 const knownFiles = ['feed_info.txt', 'agency.txt', 'stops.txt', 'routes.txt', 'trips.txt', 'stop_times.txt', 'calendar.txt', 'calendar_dates.txt', 'transfers.txt', 'shapes.txt'];
                 
-                for (const filename of Object.keys(zip.files)) {
-                    if (filename.endsWith('.txt')) {
-                        const content = await zip.files[filename].async('string');
-                        parsedData[filename] = window.Papa.parse(content, { header: true, skipEmptyLines: true }).data;
-                    }
-                }
-
-                if (parsedData['feed_info.txt'] && parsedData['feed_info.txt'].length > 0) {
-                    const row = parsedData['feed_info.txt'][0];
-                    ['feed_publisher_name','feed_publisher_url','feed_lang','default_lang','feed_start_date','feed_end_date','feed_version','feed_contact_email','feed_contact_url'].forEach(k => store.feedInfo[k] = row[k] || '');
-                    const knownInfo = Object.keys(store.feedInfo);
-                    store.feedInfo.customFields = extractDynamic(row, knownInfo);
-                }
-
-                if (parsedData['agency.txt']) {
-                    const knownAgy = ['agency_id', 'agency_name', ...agencyAttributes.map(a => a.key)];
-                    store.agencies = parsedData['agency.txt'].map(row => {
-                        const agyObj = {
-                            _internal_id: generateId(),
-                            agency_id: row.agency_id || '', 
-                            agency_name: row.agency_name || '',
-                            customFields: extractDynamic(row, knownAgy)
-                        };
-                        agencyAttributes.forEach(attr => {
-                            agyObj[attr.key] = row[attr.key] || '';
-                        });
-                        return agyObj;
+                const parseZipFile = async (filename) => {
+                    if (!zip.files[filename]) return null;
+                    const blob = await zip.files[filename].async('blob');
+                    return new Promise((resolve) => {
+                        window.Papa.parse(blob, { header: true, skipEmptyLines: true, complete: (res) => resolve(res.data) });
                     });
-                }
+                };
 
-                if (parsedData['stops.txt']) {
+                // Zastávky (Stops)
+                store.importMessage = 'Načítám zastávky...';
+                const stopsRaw = await parseZipFile('stops.txt');
+                if (stopsRaw) {
                     const knownStp = ['stop_id', 'stop_name', 'stop_lat', 'stop_lon'];
-                    store.stops = parsedData['stops.txt'].map(row => ({ _internal_id: generateId(), stop_id: row.stop_id, stop_name: row.stop_name || row.stop_id, stop_lat: row.stop_lat, stop_lon: row.stop_lon, dynamicFields: extractDynamic(row, knownStp) }));
+                    store.stops = stopsRaw.map(row => ({ _internal_id: generateId(), stop_id: row.stop_id, stop_name: row.stop_name || row.stop_id, stop_lat: row.stop_lat, stop_lon: row.stop_lon, dynamicFields: extractDynamic(row, knownStp) }));
                 }
 
-                if (parsedData['routes.txt']) {
+                // Linky (Routes)
+                store.importMessage = 'Načítám linky...';
+                const routesRaw = await parseZipFile('routes.txt');
+                if (routesRaw) {
                     const knownRte = ['route_id', 'route_short_name', 'agency_id'];
-                    store.lines = parsedData['routes.txt'].map(row => ({ _internal_id: generateId(), route_id: row.route_id, route_short_name: row.route_short_name || '', agency_id: row.agency_id || '', patterns: { '0': [], '1': [] }, dynamicFields: extractDynamic(row, knownRte) }));
+                    store.lines = routesRaw.map(row => ({ _internal_id: generateId(), route_id: row.route_id, route_short_name: row.route_short_name || '', agency_id: row.agency_id || '', patterns: { '0': [], '1': [] }, dynamicFields: extractDynamic(row, knownRte) }));
                 }
 
-                if (parsedData['trips.txt'] && parsedData['stop_times.txt']) {
-                    const stByTrip = {};
-                    parsedData['stop_times.txt'].forEach(st => { if(!stByTrip[st.trip_id]) stByTrip[st.trip_id] = []; stByTrip[st.trip_id].push(st); });
-                    
-                    const knownTrp = ['trip_id', 'route_id', 'service_id', 'direction_id'];
-                    store.trips = parsedData['trips.txt'].map(row => {
-                        const st = (stByTrip[row.trip_id] || []).sort((a,b) => parseInt(a.stop_sequence) - parseInt(b.stop_sequence));
-                        return { _internal_id: generateId(), trip_id: row.trip_id, route_id: row.route_id, service_id: row.service_id, direction_id: row.direction_id || '0', _expanded: false, stop_times: st, dynamicFields: extractDynamic(row, knownTrp) };
+                // Stop Times (Streaming = klíč pro RAM)
+                let stByTrip = {};
+                if (zip.files['stop_times.txt']) {
+                    store.importMessage = 'Načítám jízdní řády (Může trvat u velkých souborů)...';
+                    const blobST = await zip.files['stop_times.txt'].async('blob');
+                    stByTrip = await new Promise((resolve) => {
+                        const dict = {};
+                        window.Papa.parse(blobST, {
+                            header: true, skipEmptyLines: true,
+                            chunk: (results) => {
+                                for (let i = 0; i < results.data.length; i++) {
+                                    const st = results.data[i];
+                                    if (!dict[st.trip_id]) dict[st.trip_id] = [];
+                                    dict[st.trip_id].push({ stop_id: st.stop_id, arrival_time: st.arrival_time, departure_time: st.departure_time, stop_sequence: st.stop_sequence });
+                                }
+                            },
+                            complete: () => resolve(dict)
+                        });
                     });
+                }
+
+                // Trips
+                if (zip.files['trips.txt']) {
+                    store.importMessage = 'Propojuji spoje a zastávky...';
+                    const tripsRaw = await parseZipFile('trips.txt');
+                    const knownTrp = ['trip_id', 'route_id', 'service_id', 'direction_id'];
+                    const mappedTrips = tripsRaw.map(row => {
+                        const st = (stByTrip[row.trip_id] || []).sort((a,b) => parseInt(a.stop_sequence) - parseInt(b.stop_sequence));
+                        return markRaw({ _internal_id: generateId(), trip_id: row.trip_id, route_id: row.route_id, service_id: row.service_id, direction_id: row.direction_id || '0', _expanded: false, stop_times: st, dynamicFields: extractDynamic(row, knownTrp) });
+                    });
+                    store.trips = mappedTrips;
+                    stByTrip = null; // Vyčistí RAM
 
                     store.lines.forEach(route => {
                         ['0', '1'].forEach(dir => {
                             const dirTrips = store.trips.filter(t => t.route_id === route.route_id && t.direction_id === dir);
                             if(dirTrips.length > 0) {
-                                dirTrips.sort((a,b) => b.stop_times.length - a.stop_times.length);
-                                const tpl = dirTrips[0];
-                                let currSecs = timeStringToSeconds(tpl.stop_times[0].departure_time);
+                                // Najdi trip s nejvíce zastávkami pro sestavení patternu
+                                const tpl = dirTrips.reduce((prev, current) => (prev.stop_times.length > current.stop_times.length) ? prev : current);
+                                let currSecs = timeStringToSeconds(tpl.stop_times[0]?.departure_time || '00:00:00');
                                 route.patterns[dir] = tpl.stop_times.map((st, idx) => {
                                     let offset = 0;
                                     if(idx < tpl.stop_times.length - 1) {
@@ -406,34 +443,62 @@ const app = createApp({
                     });
                 }
 
-                if (parsedData['calendar.txt']) store.calendar = parsedData['calendar.txt'].map(row => ({ _internal_id: generateId(), ...row }));
-                if (parsedData['calendar_dates.txt']) store.calendarDates = parsedData['calendar_dates.txt'];
-                if (parsedData['transfers.txt']) store.transfers = parsedData['transfers.txt'];
+                // Ostatní soubory
+                store.importMessage = 'Načítám doplňující data...';
                 
-                if (parsedData['shapes.txt']) {
-                    store.shapes = parsedData['shapes.txt'];
+                const feedInfoRaw = await parseZipFile('feed_info.txt');
+                if (feedInfoRaw && feedInfoRaw.length > 0) {
+                    const row = feedInfoRaw[0];
+                    ['feed_publisher_name','feed_publisher_url','feed_lang','default_lang','feed_start_date','feed_end_date','feed_version','feed_contact_email','feed_contact_url'].forEach(k => store.feedInfo[k] = row[k] || '');
+                    store.feedInfo.customFields = extractDynamic(row, Object.keys(store.feedInfo));
+                }
+
+                const agencyRaw = await parseZipFile('agency.txt');
+                if (agencyRaw) {
+                    const knownAgy = ['agency_id', 'agency_name', ...agencyAttributes.map(a => a.key)];
+                    store.agencies = agencyRaw.map(row => {
+                        const agyObj = { _internal_id: generateId(), agency_id: row.agency_id || '', agency_name: row.agency_name || '', customFields: extractDynamic(row, knownAgy) };
+                        agencyAttributes.forEach(attr => agyObj[attr.key] = row[attr.key] || '');
+                        return agyObj;
+                    });
+                }
+
+                const calRaw = await parseZipFile('calendar.txt');
+                if (calRaw) store.calendar = calRaw.map(row => ({ _internal_id: generateId(), ...row }));
+                
+                const datesRaw = await parseZipFile('calendar_dates.txt');
+                if (datesRaw) store.calendarDates = datesRaw;
+
+                const transRaw = await parseZipFile('transfers.txt');
+                if (transRaw) store.transfers = transRaw;
+                
+                const shapesRaw = await parseZipFile('shapes.txt');
+                if (shapesRaw) {
+                    store.shapes = markRaw(shapesRaw);
                     const shpGroups = {};
                     store.shapes.forEach(s => { if(!shpGroups[s.shape_id]) shpGroups[s.shape_id] = 0; shpGroups[s.shape_id]++; });
                     store.shapesSummary = Object.keys(shpGroups).map(k => ({ shape_id: k, points_count: shpGroups[k], trips_count: store.trips.filter(t => t.dynamicFields.find(f => f.key === 'shape_id' && f.value === k)).length }));
                 }
 
-                const extra = Object.keys(parsedData).filter(f => !knownFiles.includes(f));
-                store.extraFiles = extra.map(filename => {
-                    const rows = parsedData[filename];
-                    const headers = rows.length > 0 ? Object.keys(rows[0]) : ['col1'];
-                    return { name: filename, headers: headers, rows: rows };
-                });
+                for (const filename of Object.keys(zip.files)) {
+                    if (filename.endsWith('.txt') && !knownFiles.includes(filename)) {
+                        const rows = await parseZipFile(filename);
+                        if (rows) {
+                            const headers = rows.length > 0 ? Object.keys(rows[0]) : ['col1'];
+                            store.extraFiles.push({ name: filename, headers: headers, rows: rows });
+                        }
+                    }
+                }
 
                 store.importMessage = 'Feed successfully imported!';
-            } catch (err) { store.importMessage = `Import Error: ${err.message}`; } 
-            finally { store.isImporting = false; }
+            } catch (err) {
+                store.importMessage = `Import Error: ${err.message}`;
+            } finally {
+                store.isImporting = false;
+            }
         };
 
-        // --- EXPORT LOGIC ---
-        const isExporting = ref(false);
-        const exportMessage = ref('');
-        const exportError = ref(false);
-
+        const isExporting = ref(false); const exportMessage = ref(''); const exportError = ref(false);
         const flattenDynamicFields = (obj) => {
             const flat = {};
             if (obj.dynamicFields) obj.dynamicFields.forEach(f => { if (f.key && f.value !== '') flat[f.key] = f.value; });
