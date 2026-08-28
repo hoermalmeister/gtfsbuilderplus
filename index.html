@@ -58,6 +58,7 @@
         .dynamic-row select { width: 35%; cursor: pointer; }
         .header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
 
+        /* Split Layouts */
         .split-layout { display: flex; height: calc(100vh - 80px); margin: -40px; position: relative; }
         .split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
         .split-right { width: 50%; padding: 40px; overflow-y: auto; position: relative; background: #e2e8f0; }
@@ -218,7 +219,7 @@
                             <div v-for="(field, index) in store.activeLine.dynamicFields" :key="index" class="dynamic-row">
                                 <select v-model="field.key"><option v-for="opt in getAvailableLineAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option></select>
                                 <select v-if="field.key === 'route_type'" v-model="field.value" style="flex:1;" @focus="triggerLineField(index)"><option v-for="rt in routeTypes" :key="rt.value" :value="rt.value">{{ rt.label }}</option></select>
-                                <input v-else v-model="field.value" @focus="triggerLineField(index)" style="flex: 1;">
+                                <input v-else v-model="field.value" @focus="triggerLineField(index)" style="flex: 1;" :placeholder="field.key === 'route_color' ? 'Hex code (e.g. FF0000)' : ''">
                                 <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeLine.dynamicFields.splice(index, 1)">✕</button>
                             </div>
                         </div>
@@ -263,6 +264,9 @@
 
             <!-- STOPS VIEW -->
             <div v-show="store.currentView === 'Stops'" style="height: 100%;">
+                <datalist id="location-types"><option value="0">0 - Stop/Platform</option><option value="1">1 - Station</option><option value="2">2 - Entrance</option><option value="3">3 - Node</option><option value="4">4 - Boarding Area</option></datalist>
+                <datalist id="wheelchair-opts"><option value="0">0 - No Info</option><option value="1">1 - Accessible</option><option value="2">2 - Not Accessible</option></datalist>
+
                 <div class="split-layout">
                     <div class="split-left">
                         <div v-show="store.stopMode === 'grid'">
@@ -294,7 +298,6 @@
                                 <div v-for="(field, index) in store.activeStop.dynamicFields" :key="index" class="dynamic-row">
                                     <select v-model="field.key"><option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option></select>
                                     
-                                    <!-- Speciální dropdowny pro Stops -->
                                     <select v-if="field.key === 'parent_station'" v-model="field.value" style="flex: 1;" @focus="triggerStopField(index)">
                                         <option value="">-- Select Parent Station --</option>
                                         <option v-for="st in store.stops.filter(s => s.stop_id !== store.activeStop.stop_id)" :key="st.stop_id" :value="st.stop_id">{{ st.stop_name }}</option>
@@ -398,22 +401,35 @@
                         <h3>Outbound (Tam) - Dir 0</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
-                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['0'].mode" value="single"> Single</label>
-                                <label><input type="radio" v-model="store.tripGenConfig['0'].mode" value="batch"> Batch</label>
+                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['0'].mode" value="single"> Single Trip</label>
+                                <label><input type="radio" v-model="store.tripGenConfig['0'].mode" value="batch"> Batch Interval</label>
                             </div>
-                            <div class="coord-input-row" v-if="store.tripGenConfig['0'].mode === 'single'">
-                                <select v-model="store.tripGenConfig['0'].service_id" style="flex: 2;"><option value="">- Service -</option><option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option></select>
-                                <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS" style="flex: 1;">
-                                <button class="btn" @click="generateTrip('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].service_id">Gen</button>
+                            
+                            <div v-if="store.tripGenConfig['0'].mode === 'single'" style="display: flex; flex-direction: column; gap: 12px;">
+                                <select v-model="store.tripGenConfig['0'].service_id" style="width: 100%;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <div style="display: flex; gap: 12px;">
+                                    <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="Start Time (HH:MM:SS)" style="flex: 1;">
+                                    <button class="btn" @click="generateTrip('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].service_id">Generate</button>
+                                </div>
                             </div>
-                            <div class="coord-input-row" v-if="store.tripGenConfig['0'].mode === 'batch'">
-                                <select v-model="store.tripGenConfig['0'].service_id" style="flex: 2;"><option value="">- Service -</option><option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option></select>
-                                <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS" style="flex: 1;" title="Start">
-                                <input type="text" v-model="store.tripGenConfig['0'].end_time" placeholder="HH:MM:SS" style="flex: 1;" title="End">
-                                <input type="text" v-model="store.tripGenConfig['0'].interval" placeholder="HH:MM:SS" style="width: 100px;" title="Interval">
-                                <button class="btn" @click="generateBatchTrips('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].end_time || !store.tripGenConfig['0'].interval || !store.tripGenConfig['0'].service_id">Gen</button>
+
+                            <div v-if="store.tripGenConfig['0'].mode === 'batch'" style="display: flex; flex-direction: column; gap: 12px;">
+                                <select v-model="store.tripGenConfig['0'].service_id" style="width: 100%;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <div style="display: flex; gap: 8px;">
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">Start Time</label><input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">End Time</label><input type="text" v-model="store.tripGenConfig['0'].end_time" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">Interval</label><input type="text" v-model="store.tripGenConfig['0'].interval" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                </div>
+                                <button class="btn" @click="generateBatchTrips('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].end_time || !store.tripGenConfig['0'].interval || !store.tripGenConfig['0'].service_id">Generate Batch Trips</button>
                             </div>
                         </div>
+
                         <div v-for="trip in getTripsForRouteAndDir('0')" :key="trip._internal_id" class="stop-sequence-item" style="justify-content: space-between;">
                             <div><strong>Departs: {{ trip.stop_times[0]?.departure_time }}</strong> <span class="badge badge-opt">{{ trip.service_id }}</span></div>
                             <button class="btn btn-outline" style="padding: 6px 12px; font-size: 0.8rem;" @click="openTripEdit(trip)">Edit Trip</button>
@@ -424,20 +440,32 @@
                         <h3>Inbound (Zpět) - Dir 1</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
-                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['1'].mode" value="single"> Single</label>
-                                <label><input type="radio" v-model="store.tripGenConfig['1'].mode" value="batch"> Batch</label>
+                                <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['1'].mode" value="single"> Single Trip</label>
+                                <label><input type="radio" v-model="store.tripGenConfig['1'].mode" value="batch"> Batch Interval</label>
                             </div>
-                            <div class="coord-input-row" v-if="store.tripGenConfig['1'].mode === 'single'">
-                                <select v-model="store.tripGenConfig['1'].service_id" style="flex: 2;"><option value="">- Service -</option><option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option></select>
-                                <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS" style="flex: 1;">
-                                <button class="btn" @click="generateTrip('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].service_id">Gen</button>
+                            
+                            <div v-if="store.tripGenConfig['1'].mode === 'single'" style="display: flex; flex-direction: column; gap: 12px;">
+                                <select v-model="store.tripGenConfig['1'].service_id" style="width: 100%;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <div style="display: flex; gap: 12px;">
+                                    <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="Start Time (HH:MM:SS)" style="flex: 1;">
+                                    <button class="btn" @click="generateTrip('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].service_id">Generate</button>
+                                </div>
                             </div>
-                            <div class="coord-input-row" v-if="store.tripGenConfig['1'].mode === 'batch'">
-                                <select v-model="store.tripGenConfig['1'].service_id" style="flex: 2;"><option value="">- Service -</option><option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option></select>
-                                <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS" style="flex: 1;">
-                                <input type="text" v-model="store.tripGenConfig['1'].end_time" placeholder="HH:MM:SS" style="flex: 1;">
-                                <input type="text" v-model="store.tripGenConfig['1'].interval" placeholder="HH:MM:SS" style="width: 100px;">
-                                <button class="btn" @click="generateBatchTrips('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].end_time || !store.tripGenConfig['1'].interval || !store.tripGenConfig['1'].service_id">Gen</button>
+
+                            <div v-if="store.tripGenConfig['1'].mode === 'batch'" style="display: flex; flex-direction: column; gap: 12px;">
+                                <select v-model="store.tripGenConfig['1'].service_id" style="width: 100%;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <div style="display: flex; gap: 8px;">
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">Start Time</label><input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">End Time</label><input type="text" v-model="store.tripGenConfig['1'].end_time" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                    <div style="flex: 1;"><label style="font-size:0.75rem; color:#64748b; font-weight:600;">Interval</label><input type="text" v-model="store.tripGenConfig['1'].interval" placeholder="HH:MM:SS" style="width: 100%;"></div>
+                                </div>
+                                <button class="btn" @click="generateBatchTrips('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].end_time || !store.tripGenConfig['1'].interval || !store.tripGenConfig['1'].service_id">Generate Batch Trips</button>
                             </div>
                         </div>
                         <div v-for="trip in getTripsForRouteAndDir('1')" :key="trip._internal_id" class="stop-sequence-item" style="justify-content: space-between;">
@@ -447,6 +475,7 @@
                     </div>
                 </div>
 
+                <!-- Single Trip Edit Layout -->
                 <div class="split-layout" v-if="store.tripMode === 'edit' && store.activeTripEdit">
                     <div style="position: absolute; top: 0; left: 0; right: 0; padding: 20px 40px; background: white; border-bottom: 1px solid var(--border); z-index: 5; display: flex; gap: 16px; align-items: center; justify-content: space-between;">
                         <div style="display: flex; gap: 16px; align-items: center;">
@@ -467,11 +496,11 @@
                                     <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
                                 </select>
                             </div>
+                            
                             <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
                             <div v-for="(field, index) in store.activeTripEdit.dynamicFields" :key="index" class="dynamic-row">
                                 <select v-model="field.key"><option v-for="opt in getAvailableTripAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option></select>
                                 
-                                <!-- Speciální dropdowny pro Trips -->
                                 <select v-if="field.key === 'shape_id'" v-model="field.value" style="flex: 1;" @focus="triggerTripField(index)">
                                     <option value="">-- Select Shape --</option>
                                     <option v-for="shp in store.shapesSummary" :key="shp.shape_id" :value="shp.shape_id">{{ shp.shape_id }}</option>
@@ -497,10 +526,12 @@
                                 <span style="flex: 1; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" :title="getStopName(st.stop_id)">{{ getStopName(st.stop_id) }}</span>
                                 <input type="text" v-model="st.arrival_time" style="width: 80px; padding: 6px; font-size: 0.8rem;" title="Arrival HH:MM:SS">
                                 <input type="text" v-model="st.departure_time" style="width: 80px; padding: 6px; font-size: 0.8rem;" title="Departure HH:MM:SS">
+                                
                                 <button class="btn btn-outline" style="padding: 4px; font-size: 0.7rem;" @click="moveStopTime(idx, -1)" :disabled="idx === 0">↑</button>
                                 <button class="btn btn-outline" style="padding: 4px; font-size: 0.7rem;" @click="moveStopTime(idx, 1)" :disabled="idx === store.activeTripEdit.stop_times.length - 1">↓</button>
                                 <button class="btn btn-danger" style="padding: 4px 8px; font-size: 0.7rem;" @click="store.activeTripEdit.stop_times.splice(idx, 1)">✕</button>
                             </div>
+                            
                             <div class="coord-input-row" style="margin-top: 16px;">
                                 <select v-model="store.newTripStopId" style="flex: 1;">
                                     <option value="">-- Add Stop to Trip (Závlek) --</option>
@@ -549,34 +580,47 @@
             </div>
 
             <!-- SHAPES VIEW (BRouter) -->
-            <div class="view-container" v-show="store.currentView === 'Shapes'">
-                <h1>Shapes (Routing via BRouter)</h1>
-                <div class="card">
-                    <p style="color: #64748b; font-size: 0.9rem; margin-top: 0;">Select a Line and Direction to auto-generate geographic shapes connecting its stops using BRouter API.</p>
-                    <div class="coord-input-row" style="margin-top: 16px;">
-                        <select v-model="store.brouterConfig.line_id" style="flex: 2;">
-                            <option value="">-- Select Line --</option>
-                            <option v-for="r in store.lines" :key="r._internal_id" :value="r._internal_id">{{ r.route_short_name }} ({{ r.route_id }})</option>
-                        </select>
-                        <select v-model="store.brouterConfig.direction" style="flex: 1;">
-                            <option value="0">Dir 0 (Outbound)</option>
-                            <option value="1">Dir 1 (Inbound)</option>
-                        </select>
-                        <select v-model="store.brouterConfig.profile" style="flex: 1;">
-                            <option value="car-test">Bus (Roads)</option>
-                            <option value="rail">Train (Rail)</option>
-                        </select>
-                        <button class="btn" @click="generateShapeFromBRouter" :disabled="!store.brouterConfig.line_id || store.brouterLoading">
-                            {{ store.brouterLoading ? 'Loading...' : 'Generate Shape' }}
+            <div class="split-layout" v-show="store.currentView === 'Shapes'">
+                <div class="split-left">
+                    <h1 style="margin-bottom: 24px;">Shapes Auto-Generator</h1>
+                    <div class="card">
+                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 0;">Select a Line. The system will group trips by unique stop sequences and generate precise routes using BRouter.</p>
+                        <div class="form-group" style="margin-bottom: 12px;">
+                            <label>Target Route</label>
+                            <select v-model="store.shapeGenConfig.route_id" style="width: 100%;">
+                                <option value="">-- Select Route --</option>
+                                <option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{ r.route_short_name }} ({{ r.route_id }})</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 24px;">
+                            <label>Routing Method</label>
+                            <select v-model="store.shapeGenConfig.profile" style="width: 100%;">
+                                <option value="car-test">Roads (Bus / Car)</option>
+                                <option value="rail">Rail (Train)</option>
+                                <option value="straight">Water / Direct (Straight Lines)</option>
+                            </select>
+                        </div>
+                        <button class="btn" @click="generateShapesForRoute" :disabled="!store.shapeGenConfig.route_id || store.brouterLoading" style="width: 100%; padding: 12px; font-size: 1rem;">
+                            {{ store.brouterLoading ? 'Generating Shapes (Please wait)...' : 'Generate Shapes for all Trips' }}
                         </button>
                     </div>
+                    
+                    <div v-for="(shp, idx) in store.shapesSummary" :key="idx" class="card" style="padding: 16px; margin-bottom: 12px;">
+                        <div class="flex-between" style="margin-bottom: 0;">
+                            <div>
+                                <strong style="color: var(--primary);">{{ shp.shape_id }}</strong>
+                                <div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">Points: {{ shp.points_count }} | Trips assigned: {{ shp.trips_count }}</div>
+                            </div>
+                            <button class="btn btn-danger" @click="deleteShape(shp.shape_id)">Delete</button>
+                        </div>
+                    </div>
                 </div>
-                <div v-for="(shp, idx) in store.shapesSummary" :key="idx" class="card" style="padding: 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div><strong style="font-size: 1.1rem; color: var(--primary);">{{ shp.shape_id }}</strong><div style="font-size: 0.85rem; color: #64748b; margin-top: 4px;">Generated Points: {{ shp.points_count }}</div></div>
-                    <button class="btn btn-danger" @click="deleteShape(shp.shape_id)">Delete</button>
+                <div class="split-right" style="padding:0;">
+                    <div id="map-container-shapes" class="map-wrapper"></div>
                 </div>
             </div>
 
+            <!-- PLACEHOLDERS -->
             <div class="view-container" v-show="['Import', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
                 <p>This section is under construction.</p>
