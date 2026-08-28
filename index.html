@@ -53,10 +53,15 @@
         .dynamic-row select { width: 35%; cursor: pointer; }
         .header-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 24px; }
 
+        /* Splits */
         .split-layout { display: flex; height: calc(100vh - 40px); margin: -40px; }
         .split-left { width: 50%; padding: 40px; overflow-y: auto; border-right: 1px solid var(--border); }
         .split-right { width: 50%; position: relative; background: #e2e8f0; }
         .map-wrapper { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+
+        .split-vertical { display: flex; flex-direction: column; height: 100vh; margin: -40px; }
+        .split-top, .split-bottom { flex: 1; padding: 40px; overflow-y: auto; }
+        .split-bottom { background: #e2e8f0; border-top: 1px solid var(--border); }
 
         .direction-toggle { display: flex; background: var(--border); padding: 4px; border-radius: 8px; margin-bottom: 24px; }
         .dir-btn { flex: 1; padding: 10px; text-align: center; border-radius: 6px; cursor: pointer; font-weight: 600; color: #64748b; }
@@ -86,10 +91,15 @@
                 <h1>Feed Information</h1>
                 <div class="card">
                     <div class="form-grid">
-                        <div class="form-group"><label>Publisher Name</label><input v-model="store.feedInfo.feed_publisher_name"></div>
-                        <div class="form-group"><label>Publisher URL</label><input v-model="store.feedInfo.feed_publisher_url"></div>
-                        <div class="form-group"><label>Language</label><input v-model="store.feedInfo.feed_lang"></div>
-                        <div class="form-group"><label>Feed Version</label><input v-model="store.feedInfo.feed_version"></div>
+                        <div class="form-group"><label>Publisher Name <span class="badge badge-req">Req</span></label><input v-model="store.feedInfo.feed_publisher_name"></div>
+                        <div class="form-group"><label>Publisher URL <span class="badge badge-req">Req</span></label><input v-model="store.feedInfo.feed_publisher_url"></div>
+                        <div class="form-group"><label>Language (feed_lang) <span class="badge badge-req">Req</span></label><input v-model="store.feedInfo.feed_lang"></div>
+                        <div class="form-group"><label>Default Lang (default_lang) <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.default_lang"></div>
+                        <div class="form-group"><label>Start Date (YYYYMMDD) <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.feed_start_date"></div>
+                        <div class="form-group"><label>End Date (YYYYMMDD) <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.feed_end_date"></div>
+                        <div class="form-group"><label>Feed Version <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.feed_version"></div>
+                        <div class="form-group"><label>Contact Email <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.feed_contact_email"></div>
+                        <div class="form-group"><label>Contact URL <span class="badge badge-opt">Opt</span></label><input v-model="store.feedInfo.feed_contact_url"></div>
                     </div>
                 </div>
                 <div class="card">
@@ -189,11 +199,11 @@
                         <h2 style="margin-top:0;">Line Details</h2>
                         <div class="card">
                             <div class="form-group" style="margin-bottom: 16px;">
-                                <label>route_short_name <span class="badge badge-req">Required</span></label>
+                                <label>route_short_name <span class="badge badge-req">Req</span></label>
                                 <input v-model="store.activeLine.route_short_name" @focus="triggerLineField(-1)">
                             </div>
                             <div class="form-group" style="margin-bottom: 16px;">
-                                <label>agency_id <span class="badge badge-opt">Optional</span></label>
+                                <label>agency_id <span class="badge badge-opt">Opt</span></label>
                                 <select v-model="store.activeLine.agency_id">
                                     <option value="">-- No specific agency --</option>
                                     <option v-for="a in store.agencies" :key="a.agency_id" :value="a.agency_id">{{ a.agency_name }}</option>
@@ -247,14 +257,8 @@
 
             <!-- STOPS VIEW -->
             <div v-show="store.currentView === 'Stops'" style="height: 100%;">
-                <datalist id="location-types">
-                    <option value="0">0 - Stop/Platform</option><option value="1">1 - Station</option>
-                    <option value="2">2 - Entrance/Exit</option><option value="3">3 - Generic Node</option>
-                    <option value="4">4 - Boarding Area</option>
-                </datalist>
-                <datalist id="wheelchair-opts">
-                    <option value="0">0 - No Info</option><option value="1">1 - Accessible</option><option value="2">2 - Not Accessible</option>
-                </datalist>
+                <datalist id="location-types"><option value="0">0 - Stop/Platform</option><option value="1">1 - Station</option><option value="2">2 - Entrance</option><option value="3">3 - Node</option><option value="4">4 - Boarding Area</option></datalist>
+                <datalist id="wheelchair-opts"><option value="0">0 - No Info</option><option value="1">1 - Accessible</option><option value="2">2 - Not Accessible</option></datalist>
 
                 <div class="view-container" v-if="store.stopMode === 'grid'">
                     <h1 style="margin-bottom: 24px;">Stops</h1>
@@ -273,11 +277,8 @@
                             <button class="btn btn-outline" @click="store.stopMode = 'grid'">← Back</button>
                             <button class="btn" @click="saveStop" :disabled="!store.activeStop.stop_name">Save Stop</button>
                         </div>
-                        
                         <h2 style="margin-top:0;">Stop Details</h2>
-                        <div class="card" style="background: #f8fafc; margin-bottom: 24px; padding: 16px;">
-                            <p style="margin:0; font-size: 0.85rem; color: #64748b;">Hint: Click anywhere on the map to set or update coordinates.</p>
-                        </div>
+                        <div class="card" style="background: #f8fafc; margin-bottom: 24px; padding: 16px;"><p style="margin:0; font-size: 0.85rem; color: #64748b;">Hint: Click anywhere on the map to set coordinates.</p></div>
 
                         <div class="card">
                             <div class="form-grid">
@@ -286,14 +287,10 @@
                                 <div class="form-group"><label>stop_lat <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lat"></div>
                                 <div class="form-group"><label>stop_lon <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lon"></div>
                             </div>
-                            
                             <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
-                            
                             <div v-for="(field, index) in store.activeStop.dynamicFields" :key="index" class="dynamic-row">
                                 <select v-model="field.key">
-                                    <option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">
-                                        {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
-                                    </option>
+                                    <option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option>
                                 </select>
                                 <input v-model="field.value" @focus="triggerStopField(index)" style="flex: 1;"
                                        :list="field.key === 'location_type' ? 'location-types' : (field.key === 'wheelchair_boarding' ? 'wheelchair-opts' : (field.key === 'stop_timezone' ? 'tz-suggestions' : null))">
@@ -305,8 +302,86 @@
                 </div>
             </div>
 
+            <!-- CALENDAR VIEW -->
+            <div class="split-vertical" v-show="store.currentView === 'Calendar'">
+                <!-- TOP: calendar.txt -->
+                <div class="split-top">
+                    <div class="view-container" v-if="store.calendarMode === 'grid'">
+                        <h1 style="margin-bottom: 24px;">Calendar (Services)</h1>
+                        <div class="agencies-grid">
+                            <div class="agency-card" v-for="srv in store.calendar" :key="srv._internal_id" @click="openCalendar(srv)">
+                                <h3>{{ srv.service_id }}</h3>
+                                <p>{{ srv.start_date || 'N/A' }} - {{ srv.end_date || 'N/A' }}</p>
+                            </div>
+                            <div class="agency-card add-card" @click="startCreateCalendar">+ Add Service</div>
+                        </div>
+                    </div>
+
+                    <div class="view-container" v-if="store.calendarMode !== 'grid'">
+                        <div class="header-actions" style="justify-content: space-between;">
+                            <button class="btn btn-outline" @click="store.calendarMode = 'grid'">← Back</button>
+                            <div>
+                                <button class="btn btn-danger" v-if="store.calendarMode === 'details'" @click="deleteCalendar" style="margin-right: 8px;">Delete</button>
+                                <button class="btn" @click="saveCalendar" :disabled="!store.activeCalendar.service_id">Save Service</button>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="form-grid">
+                                <div class="form-group"><label>service_id <span class="badge badge-req">Req</span></label><input v-model="store.activeCalendar.service_id"></div>
+                                <div class="form-group"><label>start_date (YYYYMMDD) <span class="badge badge-req">Req</span></label><input v-model="store.activeCalendar.start_date"></div>
+                                <div class="form-group"><label>end_date (YYYYMMDD) <span class="badge badge-req">Req</span></label><input v-model="store.activeCalendar.end_date"></div>
+                            </div>
+                            <div class="form-grid" style="margin-top: 16px;">
+                                <div class="form-group" v-for="day in ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']" :key="day">
+                                    <label>{{ day.charAt(0).toUpperCase() + day.slice(1) }} <span class="badge badge-req">Req</span></label>
+                                    <select v-model="store.activeCalendar[day]">
+                                        <option value="1">1 - Available</option>
+                                        <option value="0">0 - Not Available</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOTTOM: calendar_dates.txt -->
+                <div class="split-bottom">
+                    <div class="view-container">
+                        <h2 style="margin-top:0;">Calendar Exceptions (calendar_dates.txt)</h2>
+                        <div class="card">
+                            <div class="coord-input-row">
+                                <select v-model="store.newException.service_id" style="flex: 1;">
+                                    <option value="">-- Select Service --</option>
+                                    <option v-for="srv in store.calendar" :key="srv.service_id" :value="srv.service_id">{{ srv.service_id }}</option>
+                                </select>
+                                <input v-model="store.newException.date" placeholder="Date (YYYYMMDD)" style="flex: 1;">
+                                <select v-model="store.newException.exception_type" style="flex: 1;">
+                                    <option value="1">1 - Service Added</option>
+                                    <option value="2">2 - Service Removed</option>
+                                </select>
+                                <button class="btn" @click="addException" :disabled="!store.newException.service_id || !store.newException.date">Add Exception</button>
+                            </div>
+                            
+                            <div v-for="(exc, idx) in store.calendarDates" :key="idx" class="stop-sequence-item">
+                                <div class="stop-details">
+                                    <span style="font-weight:600;">{{ exc.service_id }}</span>
+                                    <span style="color:#64748b; margin-left: 12px;">Date: {{ exc.date }}</span>
+                                </div>
+                                <div>
+                                    <span :class="['badge', exc.exception_type == '1' ? 'badge-req' : 'badge-opt']" style="background: var(--bg-nav); color: white;">
+                                        {{ exc.exception_type == '1' ? '1 - Added' : '2 - Removed' }}
+                                    </span>
+                                </div>
+                                <button class="btn btn-danger" @click="store.calendarDates.splice(idx, 1)">✕</button>
+                            </div>
+                            <p v-if="store.calendarDates.length === 0" style="color: #64748b;">No exceptions defined.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- OTHER VIEWS -->
-            <div class="view-container" v-show="['Import', 'Trips', 'Calendar', 'Shapes', 'Export'].includes(store.currentView)">
+            <div class="view-container" v-show="['Import', 'Trips', 'Shapes', 'Export'].includes(store.currentView)">
                 <h1>{{ store.currentView }}</h1>
                 <p>This section is under construction.</p>
             </div>
