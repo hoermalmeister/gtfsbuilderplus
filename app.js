@@ -26,6 +26,13 @@ const stopAttributes = sortAttrs([
     { key: 'level_id', required: false }, { key: 'platform_code', required: false }
 ]);
 
+const tripAttributes = sortAttrs([
+    { key: 'trip_headsign', required: false }, { key: 'trip_short_name', required: false },
+    { key: 'direction_id', required: false }, { key: 'block_id', required: false },
+    { key: 'shape_id', required: false }, { key: 'wheelchair_accessible', required: false },
+    { key: 'bikes_allowed', required: false }
+]);
+
 const routeTypes = [
     { value: '0', label: '0 - Tram' }, { value: '1', label: '1 - Subway' },
     { value: '2', label: '2 - Rail' }, { value: '3', label: '3 - Bus' },
@@ -52,14 +59,18 @@ const store = reactive({
     calendarMode: 'grid', calendar: [], activeCalendar: null, calendarDates: [],
     newException: { service_id: '', date: '', exception_type: '1' },
 
-    trips: [], tripMode: 'grid', activeTripRoute: null,
+    trips: [], tripMode: 'grid', activeTripRoute: null, activeTripEdit: null,
     tripGenConfig: { 
         '0': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' }, 
         '1': { mode: 'single', service_id: '', start_time: '', end_time: '', interval: '' } 
     },
+    newTripStopId: '',
 
     transfers: [],
-    newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' }
+    newTransfer: { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' },
+
+    shapes: [], shapesSummary: [], brouterLoading: false,
+    brouterConfig: { line_id: '', direction: '0', profile: 'car-test' }
 });
 
 const app = createApp({
@@ -153,59 +164,46 @@ const app = createApp({
         const getTripsForRouteAndDir = (dir) => {
             if (!store.activeTripRoute) return [];
             return store.trips.filter(t => t.route_id === store.activeTripRoute.route_id && t.direction_id === dir)
-                              .sort((a, b) => a.stop_times[0]?.departure_time.localeCompare(b.stop_times[0]?.departure_time));
+                              .sort((a, b) => (a.stop_times[0]?.departure_time || '').localeCompare(b.stop_times[0]?.departure_time || ''));
         };
         
         const formatGtfsTime = (totalSeconds) => {
-            const h = Math.floor(totalSeconds / 3600);
-            const m = Math.floor((totalSeconds % 3600) / 60);
-            const s = totalSeconds % 60;
+            const h = Math.floor(totalSeconds / 3600); const m = Math.floor((totalSeconds % 3600) / 60); const s = totalSeconds % 60;
             return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
         };
-        
         const timeStringToSeconds = (timeStr) => {
             if (!timeStr) return 0;
             const parts = timeStr.split(':').map(Number);
-            const h = parts[0] || 0;
-            const m = parts[1] || 0;
-            const s = parts[2] || 0;
-            return (h * 3600) + (m * 60) + s;
+            return (parts[0] || 0)*3600 + (parts[1] || 0)*60 + (parts[2] || 0);
         };
 
         const createTripObject = (dir, startSeconds, serviceId) => {
             const pattern = store.activeTripRoute.patterns[dir];
             let currentSeconds = startSeconds;
             const stopTimes = [];
-
             pattern.forEach((pStop, idx) => {
                 const timeStr = formatGtfsTime(currentSeconds);
                 stopTimes.push({ stop_id: pStop.stop_id, stop_sequence: idx + 1, arrival_time: timeStr, departure_time: timeStr });
-                const offsetSecs = (Number(pStop.timeOffsetMins) || 0) * 60 + (Number(pStop.timeOffsetSecs) || 0);
-                currentSeconds += offsetSecs;
+                currentSeconds += (Number(pStop.timeOffsetMins) || 0) * 60 + (Number(pStop.timeOffsetSecs) || 0);
             });
-            return { _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: serviceId, direction_id: dir, stop_times: stopTimes, _expanded: false };
+            return { _internal_id: generateId(), trip_id: 'T_' + generateId().toUpperCase(), route_id: store.activeTripRoute.route_id, service_id: serviceId, direction_id: dir, stop_times: stopTimes, dynamicFields: [] };
         };
 
         const generateTrip = (dir) => {
             const config = store.tripGenConfig[dir];
             if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
-            
-            const startSecs = timeStringToSeconds(config.start_time);
-            store.trips.push(createTripObject(dir, startSecs, config.service_id));
+            store.trips.push(createTripObject(dir, timeStringToSeconds(config.start_time), config.service_id));
             config.start_time = ''; 
         };
 
         const generateBatchTrips = (dir) => {
             const config = store.tripGenConfig[dir];
             if (store.activeTripRoute.patterns[dir].length === 0) { alert('No stops in Journey Pattern.'); return; }
-            
             let currentSecs = timeStringToSeconds(config.start_time);
             const endSecs = timeStringToSeconds(config.end_time);
-            const intervalSecs = timeStringToSeconds(config.interval); // HH:MM:SS format pro interval
-
-            if (intervalSecs <= 0) { alert('Interval must be greater than 0.'); return; }
+            const intervalSecs = timeStringToSeconds(config.interval);
+            if (intervalSecs <= 0) { alert('Interval must be > 0.'); return; }
             if (currentSecs > endSecs) { alert('Start time must be before end time.'); return; }
-
             while (currentSecs <= endSecs) {
                 store.trips.push(createTripObject(dir, currentSecs, config.service_id));
                 currentSecs += intervalSecs;
@@ -213,7 +211,34 @@ const app = createApp({
             config.start_time = ''; config.end_time = ''; config.interval = '';
         };
 
-        const deleteTrip = (internalId) => { if(confirm('Delete trip?')) store.trips = store.trips.filter(t => t._internal_id !== internalId); };
+        // Editace jednoho spoje
+        const openTripEdit = (trip) => { store.activeTripEdit = trip; store.tripMode = 'edit'; };
+        const saveTripEdit = () => { 
+            // Přepočet sekvencí před opuštěním
+            store.activeTripEdit.stop_times.forEach((st, idx) => st.stop_sequence = idx + 1);
+            store.tripMode = 'details'; 
+        };
+        const deleteTrip = (internalId) => { if(confirm('Delete trip?')) { store.trips = store.trips.filter(t => t._internal_id !== internalId); store.tripMode = 'details'; } };
+        const getAvailableTripAttributes = (key) => tripAttributes.filter(attr => attr.key === key || !store.activeTripEdit.dynamicFields.map(f=>f.key).includes(attr.key));
+        const triggerTripField = (index) => {
+            if (index === -1 || index === store.activeTripEdit.dynamicFields.length - 1) {
+                const used = store.activeTripEdit.dynamicFields.map(f => f.key);
+                const next = tripAttributes.find(attr => !used.includes(attr.key));
+                if (next) store.activeTripEdit.dynamicFields.push({ key: next.key, value: '' });
+            }
+        };
+        const moveStopTime = (index, dir) => {
+            const arr = store.activeTripEdit.stop_times;
+            if (index + dir < 0 || index + dir >= arr.length) return;
+            const temp = arr[index]; arr[index] = arr[index + dir]; arr[index + dir] = temp;
+            arr.forEach((st, idx) => st.stop_sequence = idx + 1);
+        };
+        const addStopToTrip = () => {
+            if(store.newTripStopId) {
+                store.activeTripEdit.stop_times.push({ stop_id: store.newTripStopId, stop_sequence: store.activeTripEdit.stop_times.length + 1, arrival_time: '00:00:00', departure_time: '00:00:00' });
+                store.newTripStopId = '';
+            }
+        };
 
         // --- TRANSFERS ---
         const getTripsForRoute = (routeId) => store.trips.filter(t => t.route_id === routeId);
@@ -224,6 +249,58 @@ const app = createApp({
         const addTransfer = () => {
             store.transfers.push({ ...store.newTransfer });
             store.newTransfer = { from_route_id: '', from_trip_id: '', from_stop_id: '', to_route_id: '', to_trip_id: '', to_stop_id: '', transfer_type: '0', min_transfer_time: '' };
+        };
+
+        // --- SHAPES (BRouter) ---
+        const generateShapeFromBRouter = async () => {
+            const lineId = store.brouterConfig.line_id;
+            const dir = store.brouterConfig.direction;
+            const profile = store.brouterConfig.profile;
+            
+            const line = store.lines.find(l => l._internal_id === lineId);
+            if (!line || line.patterns[dir].length < 2) { alert('Line has less than 2 stops in this direction.'); return; }
+            
+            store.brouterLoading = true;
+            
+            // Extrakce souřadnic ze zastávek v sekvenci
+            const coordsStr = line.patterns[dir].map(pStop => {
+                const s = store.stops.find(st => st.stop_id === pStop.stop_id);
+                return s ? `${s.stop_lon},${s.stop_lat}` : null;
+            }).filter(c => c !== null).join('|');
+
+            try {
+                const url = `https://brouter.de/brouter?lonlats=${coordsStr}&profile=${profile}&alternativeidx=0&format=geojson`;
+                const res = await fetch(url);
+                if (!res.ok) throw new Error('BRouter request failed.');
+                const geojson = await res.json();
+                
+                if (geojson.features && geojson.features.length > 0) {
+                    const coords = geojson.features[0].geometry.coordinates; // [[lon, lat], [lon, lat]]
+                    const shapeId = `SHP_${line.route_short_name}_${dir}_${generateId().toUpperCase()}`;
+                    
+                    coords.forEach((c, idx) => {
+                        store.shapes.push({
+                            shape_id: shapeId,
+                            shape_pt_lat: c[1].toFixed(7),
+                            shape_pt_lon: c[0].toFixed(7),
+                            shape_pt_sequence: idx + 1
+                        });
+                    });
+                    store.shapesSummary.push({ shape_id: shapeId, points_count: coords.length });
+                    alert(`Shape ${shapeId} successfully generated!`);
+                }
+            } catch (e) {
+                alert('Routing failed. Check if endpoints are routable in BRouter or try different profile.');
+            } finally {
+                store.brouterLoading = false;
+            }
+        };
+
+        const deleteShape = (shapeId) => {
+            if(confirm(`Delete Shape ${shapeId}?`)) {
+                store.shapes = store.shapes.filter(s => s.shape_id !== shapeId);
+                store.shapesSummary = store.shapesSummary.filter(s => s.shape_id !== shapeId);
+            }
         };
 
         // --- MAP LOGIC ---
@@ -256,17 +333,16 @@ const app = createApp({
                 });
             } else if (store.currentView === 'Stops') {
                 if (store.stopMode === 'grid') {
-                    // Kreslíme všechny stanice v grid pohledu
                     store.stops.forEach(s => {
                         const el = document.createElement('div'); el.className = 'stop-icon'; el.title = s.stop_name;
                         markers.push(new maplibregl.Marker({element: el}).setLngLat([parseFloat(s.stop_lon), parseFloat(s.stop_lat)]).addTo(map));
                     });
                 } else if (store.activeStop && store.activeStop.stop_lat) {
-                    // Kreslíme pouze aktivní stanici v detailu
                     const el = document.createElement('div'); el.className = 'stop-icon'; el.style.background = '#2563eb';
                     markers.push(new maplibregl.Marker({element: el}).setLngLat([parseFloat(store.activeStop.stop_lon), parseFloat(store.activeStop.stop_lat)]).addTo(map));
                 }
             }
+            
             if (markers.length > 1) {
                 const b = new maplibregl.LngLatBounds(); markers.forEach(m => b.extend(m.getLngLat())); map.fitBounds(b, { padding: 50 });
             } else if (markers.length === 1 && store.currentView === 'Stops') {
@@ -290,14 +366,16 @@ const app = createApp({
         }, { deep: true });
 
         return {
-            store, agencyAttributes, commonTimezones, routeAttributes, routeTypes, stopAttributes, 
+            store, agencyAttributes, commonTimezones, routeAttributes, routeTypes, stopAttributes, tripAttributes,
             coordInput, coordStopName, selectedExistingStop,
             openAgency, deleteSelectedAgency, startCreateAgency, getAvailableAttributes, triggerAgencyField, saveNewAgency, addCustomField,
             startCreateLine, openLine, saveLine, getAvailableLineAttributes, triggerLineField, getStopName, addExistingStopToPattern, addStopFromCoords,
             startCreateStop, openStop, saveStop, getAvailableStopAttributes, triggerStopField,
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
-            openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, deleteTrip,
-            getTripsForRoute, getStopsForTrip, addTransfer
+            openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, 
+            openTripEdit, saveTripEdit, deleteTrip, getAvailableTripAttributes, triggerTripField, moveStopTime, addStopToTrip,
+            getTripsForRoute, getStopsForTrip, addTransfer,
+            generateShapeFromBRouter, deleteShape
         };
     }
 });
