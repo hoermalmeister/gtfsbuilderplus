@@ -21,7 +21,8 @@
         .nav-btn.active { background-color: var(--primary); color: white; }
 
         #content { flex-grow: 1; overflow-y: auto; padding: 40px; position: relative; }
-        .view-container { max-width: 800px; margin: 0 auto; padding-bottom: 40px; }
+        .view-container { max-width: 900px; margin: 0 auto; padding-bottom: 40px; }
+        .view-container-full { max-width: 1400px; margin: 0 auto; padding-bottom: 40px; }
         h1 { margin-top: 0; font-size: 1.8rem; color: #0f172a; }
         h2 { font-size: 1.4rem; color: #0f172a; margin-top: 0; }
         h3 { font-size: 1.1rem; color: #0f172a; margin-top: 0; }
@@ -77,6 +78,12 @@
         .stop-details { flex: 1; }
         .time-offset { width: 45px; text-align: center; padding: 6px; }
         .coord-input-row { display: flex; gap: 12px; margin-bottom: 16px; align-items: center; }
+
+        /* Transfers Table */
+        .transfers-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 8px; overflow: hidden; }
+        .transfers-table th { background: var(--bg-dark); color: white; padding: 12px 10px; text-align: left; }
+        .transfers-table td { padding: 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+        .transfers-table select, .transfers-table input { width: 100%; padding: 6px; font-size: 0.85rem; box-sizing: border-box; }
     </style>
 </head>
 <body>
@@ -122,7 +129,7 @@
             </div>
 
             <!-- AGENCIES VIEW -->
-            <div class="view-container" v-show="store.currentView === 'Agencies'" style="max-width: 900px;">
+            <div class="view-container" v-show="store.currentView === 'Agencies'">
                 <datalist id="lang-suggestions"><option :value="store.feedInfo.feed_lang">Default</option></datalist>
                 <datalist id="tz-suggestions"><option v-for="tz in commonTimezones" :key="tz" :value="tz"></option></datalist>
 
@@ -231,8 +238,8 @@
 
                         <h2>Journey Pattern</h2>
                         <div class="direction-toggle">
-                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound</div>
-                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '0'}" @click="store.activeDirection = '0'">Outbound (Tam)</div>
+                            <div class="dir-btn" :class="{active: store.activeDirection === '1'}" @click="store.activeDirection = '1'">Inbound (Zpět)</div>
                         </div>
                         <div class="card" style="background: #f8fafc;">
                             <div class="coord-input-row">
@@ -272,41 +279,46 @@
                 <datalist id="location-types"><option value="0">0 - Stop/Platform</option><option value="1">1 - Station</option><option value="2">2 - Entrance</option><option value="3">3 - Node</option><option value="4">4 - Boarding Area</option></datalist>
                 <datalist id="wheelchair-opts"><option value="0">0 - No Info</option><option value="1">1 - Accessible</option><option value="2">2 - Not Accessible</option></datalist>
 
-                <div class="view-container" v-if="store.stopMode === 'grid'">
-                    <h1 style="margin-bottom: 24px;">Stops</h1>
-                    <div class="agencies-grid">
-                        <div class="agency-card" v-for="stop in store.stops" :key="stop._internal_id" @click="openStop(stop)">
-                            <h3>{{ stop.stop_name }}</h3>
-                            <p>{{ stop.stop_id }}</p>
-                        </div>
-                        <div class="agency-card add-card" @click="startCreateStop">+ Create Stop</div>
-                    </div>
-                </div>
-
-                <div class="split-layout" v-if="store.stopMode !== 'grid'">
+                <!-- Vždy sdílený Split Layout pro Stops -->
+                <div class="split-layout">
                     <div class="split-left">
-                        <div class="header-actions" style="justify-content: space-between;">
-                            <button class="btn btn-outline" @click="store.stopMode = 'grid'">← Back</button>
-                            <button class="btn" @click="saveStop" :disabled="!store.activeStop.stop_name">Save Stop</button>
-                        </div>
-                        <h2 style="margin-top:0;">Stop Details</h2>
-                        <div class="card" style="background: #f8fafc; margin-bottom: 24px; padding: 16px;"><p style="margin:0; font-size: 0.85rem; color: #64748b;">Hint: Click anywhere on the map to set coordinates.</p></div>
-
-                        <div class="card">
-                            <div class="form-grid">
-                                <div class="form-group"><label>stop_id <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_id" disabled></div>
-                                <div class="form-group"><label>stop_name <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_name" @focus="triggerStopField(-1)"></div>
-                                <div class="form-group"><label>stop_lat <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lat"></div>
-                                <div class="form-group"><label>stop_lon <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lon"></div>
+                        <!-- Zobrazení seznamu -->
+                        <div v-show="store.stopMode === 'grid'">
+                            <h1 style="margin-bottom: 24px;">Stops</h1>
+                            <div class="agencies-grid">
+                                <div class="agency-card" v-for="stop in store.stops" :key="stop._internal_id" @click="openStop(stop)">
+                                    <h3>{{ stop.stop_name }}</h3>
+                                    <p>{{ stop.stop_id }}</p>
+                                </div>
+                                <div class="agency-card add-card" @click="startCreateStop">+ Create Stop</div>
                             </div>
-                            <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
-                            <div v-for="(field, index) in store.activeStop.dynamicFields" :key="index" class="dynamic-row">
-                                <select v-model="field.key">
-                                    <option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option>
-                                </select>
-                                <input v-model="field.value" @focus="triggerStopField(index)" style="flex: 1;"
-                                       :list="field.key === 'location_type' ? 'location-types' : (field.key === 'wheelchair_boarding' ? 'wheelchair-opts' : (field.key === 'stop_timezone' ? 'tz-suggestions' : null))">
-                                <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeStop.dynamicFields.splice(index, 1)">✕</button>
+                        </div>
+
+                        <!-- Zobrazení detailu jedné zastávky -->
+                        <div v-show="store.stopMode !== 'grid'">
+                            <div class="header-actions" style="justify-content: space-between;">
+                                <button class="btn btn-outline" @click="store.stopMode = 'grid'">← Back</button>
+                                <button class="btn" @click="saveStop" :disabled="!store.activeStop?.stop_name">Save Stop</button>
+                            </div>
+                            <h2 style="margin-top:0;">Stop Details</h2>
+                            <div class="card" style="background: #f8fafc; margin-bottom: 24px; padding: 16px;"><p style="margin:0; font-size: 0.85rem; color: #64748b;">Hint: Click anywhere on the map to set coordinates.</p></div>
+
+                            <div class="card" v-if="store.activeStop">
+                                <div class="form-grid">
+                                    <div class="form-group"><label>stop_id <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_id" disabled></div>
+                                    <div class="form-group"><label>stop_name <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_name" @focus="triggerStopField(-1)"></div>
+                                    <div class="form-group"><label>stop_lat <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lat"></div>
+                                    <div class="form-group"><label>stop_lon <span class="badge badge-req">Req</span></label><input v-model="store.activeStop.stop_lon"></div>
+                                </div>
+                                <hr style="border:0; border-top: 1px solid var(--border); margin: 24px 0;">
+                                <div v-for="(field, index) in store.activeStop.dynamicFields" :key="index" class="dynamic-row">
+                                    <select v-model="field.key">
+                                        <option v-for="opt in getAvailableStopAttributes(field.key)" :key="opt.key" :value="opt.key">{{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})</option>
+                                    </select>
+                                    <input v-model="field.value" @focus="triggerStopField(index)" style="flex: 1;"
+                                           :list="field.key === 'location_type' ? 'location-types' : (field.key === 'wheelchair_boarding' ? 'wheelchair-opts' : (field.key === 'stop_timezone' ? 'tz-suggestions' : null))">
+                                    <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.activeStop.dynamicFields.splice(index, 1)">✕</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -411,7 +423,7 @@
 
                     <!-- OUTBOUND (Direction 0) -->
                     <div class="split-top" style="padding-top: 60px;">
-                        <h3>Outbound - Dir 0</h3>
+                        <h3>Outbound (Tam) - Dir 0</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
                                 <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['0'].mode" value="single"> Single Trip</label>
@@ -436,7 +448,7 @@
                                 </select>
                                 <input type="text" v-model="store.tripGenConfig['0'].start_time" placeholder="HH:MM:SS (Start)" style="flex: 1;">
                                 <input type="text" v-model="store.tripGenConfig['0'].end_time" placeholder="HH:MM:SS (End)" style="flex: 1;">
-                                <input type="number" v-model="store.tripGenConfig['0'].interval" placeholder="Mins" style="width: 70px;" title="Interval (minutes)">
+                                <input type="text" v-model="store.tripGenConfig['0'].interval" placeholder="HH:MM:SS (Int)" style="width: 120px;" title="Interval (HH:MM:SS)">
                                 <button class="btn" @click="generateBatchTrips('0')" :disabled="!store.tripGenConfig['0'].start_time || !store.tripGenConfig['0'].end_time || !store.tripGenConfig['0'].interval || !store.tripGenConfig['0'].service_id">Generate</button>
                             </div>
                         </div>
@@ -460,7 +472,7 @@
 
                     <!-- INBOUND (Direction 1) -->
                     <div class="split-bottom">
-                        <h3>Inbound - Dir 1</h3>
+                        <h3>Inbound (Zpět) - Dir 1</h3>
                         <div class="card" style="background: #eff6ff; border: 1px solid #bfdbfe;">
                             <div style="margin-bottom: 12px; font-size: 0.9rem;">
                                 <label style="margin-right: 16px;"><input type="radio" v-model="store.tripGenConfig['1'].mode" value="single"> Single Trip</label>
@@ -485,7 +497,7 @@
                                 </select>
                                 <input type="text" v-model="store.tripGenConfig['1'].start_time" placeholder="HH:MM:SS (Start)" style="flex: 1;">
                                 <input type="text" v-model="store.tripGenConfig['1'].end_time" placeholder="HH:MM:SS (End)" style="flex: 1;">
-                                <input type="number" v-model="store.tripGenConfig['1'].interval" placeholder="Mins" style="width: 70px;" title="Interval (minutes)">
+                                <input type="text" v-model="store.tripGenConfig['1'].interval" placeholder="HH:MM:SS (Int)" style="width: 120px;" title="Interval (HH:MM:SS)">
                                 <button class="btn" @click="generateBatchTrips('1')" :disabled="!store.tripGenConfig['1'].start_time || !store.tripGenConfig['1'].end_time || !store.tripGenConfig['1'].interval || !store.tripGenConfig['1'].service_id">Generate</button>
                             </div>
                         </div>
@@ -506,6 +518,78 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- TRANSFERS VIEW -->
+            <div class="view-container-full" v-show="store.currentView === 'Transfers'">
+                <h1>Transfers</h1>
+                <div class="card" style="overflow-x: auto; padding: 0;">
+                    <table class="transfers-table">
+                        <thead>
+                            <tr>
+                                <th>From Route</th><th>From Trip</th><th>From Stop</th>
+                                <th>To Route</th><th>To Trip</th><th>To Stop</th>
+                                <th>Type</th><th>Min Time (s)</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Existující přestupy -->
+                            <tr v-for="(tr, idx) in store.transfers" :key="idx">
+                                <td>{{ tr.from_route_id }}</td><td>{{ tr.from_trip_id }}</td><td>{{ tr.from_stop_id }}</td>
+                                <td>{{ tr.to_route_id }}</td><td>{{ tr.to_trip_id }}</td><td>{{ tr.to_stop_id }}</td>
+                                <td>{{ tr.transfer_type }}</td><td>{{ tr.min_transfer_time }}</td>
+                                <td><button class="btn btn-danger" style="padding: 4px 8px;" @click="store.transfers.splice(idx, 1)">✕</button></td>
+                            </tr>
+                            <!-- Tvorba nového přestupu -->
+                            <tr style="background: #f8fafc;">
+                                <td>
+                                    <select v-model="store.newTransfer.from_route_id" @change="store.newTransfer.from_trip_id=''; store.newTransfer.from_stop_id=''">
+                                        <option value="">- Route -</option>
+                                        <option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.from_trip_id" @change="store.newTransfer.from_stop_id=''">
+                                        <option value="">- Trip -</option>
+                                        <option v-for="t in getTripsForRoute(store.newTransfer.from_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.from_stop_id">
+                                        <option value="">- Stop -</option>
+                                        <option v-for="st in getStopsForTrip(store.newTransfer.from_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.to_route_id" @change="store.newTransfer.to_trip_id=''; store.newTransfer.to_stop_id=''">
+                                        <option value="">- Route -</option>
+                                        <option v-for="r in store.lines" :key="r.route_id" :value="r.route_id">{{r.route_short_name}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.to_trip_id" @change="store.newTransfer.to_stop_id=''">
+                                        <option value="">- Trip -</option>
+                                        <option v-for="t in getTripsForRoute(store.newTransfer.to_route_id)" :key="t.trip_id" :value="t.trip_id">{{t.trip_id}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.to_stop_id">
+                                        <option value="">- Stop -</option>
+                                        <option v-for="st in getStopsForTrip(store.newTransfer.to_trip_id)" :key="st.stop_id" :value="st.stop_id">{{getStopName(st.stop_id)}}</option>
+                                    </select>
+                                </td>
+                                <td>
+                                    <select v-model="store.newTransfer.transfer_type">
+                                        <option value="0">0 - Recommended</option><option value="1">1 - Timed</option>
+                                        <option value="2">2 - Min Time</option><option value="3">3 - Not Possible</option>
+                                    </select>
+                                </td>
+                                <td><input v-model="store.newTransfer.min_transfer_time" placeholder="Secs"></td>
+                                <td><button class="btn" style="padding: 6px 10px;" @click="addTransfer">+</button></td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
