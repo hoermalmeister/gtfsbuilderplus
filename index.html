@@ -188,6 +188,14 @@
             <!-- AGENCIES VIEW -->
 <div class="view-container" v-if="store.currentView === 'Agencies'" style="max-width: 900px;">
     
+    <!-- Neviditelné našeptávače (Datalisty) -->
+    <datalist id="lang-suggestions">
+        <option :value="store.feedInfo.feed_lang">Default from Feed Info</option>
+    </datalist>
+    <datalist id="tz-suggestions">
+        <option v-for="tz in commonTimezones" :key="tz" :value="tz"></option>
+    </datalist>
+
     <!-- 1. GRID VIEW -->
     <div v-if="store.agencyMode === 'grid'">
         <h1 style="margin-bottom: 24px;">Agencies</h1>
@@ -210,7 +218,6 @@
         </div>
         
         <div class="card">
-            <!-- Jméno je vždy první a fixní -->
             <div class="form-group" style="margin-bottom: 16px;">
                 <label>Agency Name <span class="badge badge-req">Required</span></label>
                 <input v-model="store.newAgency.agency_name" placeholder="e.g. City Transit" @focus="triggerNextField(-1)">
@@ -223,7 +230,12 @@
                         {{ opt.key }} ({{ opt.required ? 'Req' : 'Opt' }})
                     </option>
                 </select>
-                <input v-model="field.value" placeholder="Enter value..." @focus="triggerNextField(index)" style="flex: 1;">
+                <!-- ZDE JE ZMĚNA: Dynamické přidání atributu :list podle vybraného klíče -->
+                <input v-model="field.value" 
+                       placeholder="Enter value..." 
+                       @focus="triggerNextField(index)" 
+                       style="flex: 1;"
+                       :list="field.key === 'agency_lang' ? 'lang-suggestions' : (field.key === 'agency_timezone' ? 'tz-suggestions' : null)">
                 <button class="btn btn-outline" style="padding: 10px; color: #ef4444;" @click="store.newAgency.dynamicFields.splice(index, 1)">✕</button>
             </div>
         </div>
@@ -246,7 +258,6 @@
 
         <div class="card">
             <div class="form-grid">
-                <!-- ID je upravitelné až v detailech -->
                 <div class="form-group">
                     <label>agency_id <span class="badge badge-req">Required*</span></label>
                     <input v-model="store.selectedAgency.agency_id">
@@ -256,7 +267,7 @@
                     <input v-model="store.selectedAgency.agency_name">
                 </div>
                 
-                <!-- Generování všech standardních GTFS polí v detailech -->
+                <!-- ZDE JE ZMĚNA: Našeptávač pro už vytvořeného dopravce -->
                 <div class="form-group" v-for="attr in agencyAttributes" :key="attr.key">
                     <label>
                         {{ attr.key }} 
@@ -264,11 +275,12 @@
                             {{ attr.required ? 'Required' : 'Optional' }}
                         </span>
                     </label>
-                    <input v-model="store.selectedAgency[attr.key]">
+                    <input v-model="store.selectedAgency[attr.key]"
+                           :list="attr.key === 'agency_lang' ? 'lang-suggestions' : (attr.key === 'agency_timezone' ? 'tz-suggestions' : null)">
                 </div>
             </div>
 
-            <!-- Custom Fields pro stávajícího dopravce -->
+            <!-- Custom Fields (Zůstává nezměněno) -->
             <div style="margin-top: 32px; border-top: 1px solid var(--border); padding-top: 24px;">
                 <div class="flex-between" style="margin-bottom: 16px;">
                     <h3 style="margin: 0;">Custom Fields</h3>
