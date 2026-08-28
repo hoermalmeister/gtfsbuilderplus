@@ -313,6 +313,117 @@ const app = createApp({
             }
         };
 
+        // --- EXPORT LOGIC ---
+        const isExporting = ref(false);
+        const exportMessage = ref('');
+        const exportError = ref(false);
+
+        const flattenDynamicFields = (obj) => {
+            const flat = {};
+            if (obj.dynamicFields) {
+                obj.dynamicFields.forEach(f => {
+                    if (f.key && f.value !== '') flat[f.key] = f.value;
+                });
+            }
+            if (obj.customFields) {
+                obj.customFields.forEach(f => {
+                    if (f.key && f.value !== '') flat[f.key] = f.value;
+                });
+            }
+            return flat;
+        };
+
+        const exportGTFS = async () => {
+            isExporting.value = true;
+            exportMessage.value = 'Preparing data...';
+            exportError.value = false;
+
+            try {
+                const zip = new window.JSZip();
+
+                // 1. feed_info.txt
+                if (store.feedInfo.feed_publisher_name) {
+                    const fi = { ...store.feedInfo };
+                    delete fi.customFields;
+                    const flatFi = { ...fi, ...flattenDynamicFields(store.feedInfo) };
+                    zip.file("feed_info.txt", window.Papa.unparse([flatFi]));
+                }
+
+                // 2. agency.txt
+                if (store.agencies.length > 0) {
+                    const agencyData = store.agencies.map(a => {
+                        const { _internal_id, dynamicFields, customFields, ...rest } = a;
+                        return { ...rest, ...flattenDynamicFields(a) };
+                    });
+                    zip.file("agency.txt", window.Papa.unparse(agencyData));
+                } else { throw new Error("Missing required file: agency.txt."); }
+
+                // 3. stops.txt
+                if (store.stops.length > 0) {
+                    const stopsData = store.stops.map(s => {
+                        const { _internal_id, dynamicFields, ...rest } = s;
+                        return { ...rest, ...flattenDynamicFields(s) };
+                    });
+                    zip.file("stops.txt", window.Papa.unparse(stopsData));
+                } else { throw new Error("Missing required file: stops.txt."); }
+
+                // 4. routes.txt
+                if (store.lines.length > 0) {
+                    const routesData = store.lines.map(r => {
+                        const { _internal_id, dynamicFields, patterns, ...rest } = r;
+                        return { ...rest, ...flattenDynamicFields(r) };
+                    });
+                    zip.file("routes.txt", window.Papa.unparse(routesData));
+                } else { throw new Error("Missing required file: routes.txt."); }
+
+                // 5. trips.txt & stop_times.txt
+                if (store.trips.length > 0) {
+                    const tripsData = []; const stopTimesData = [];
+                    store.trips.forEach(t => {
+                        const { _internal_id, _expanded, stop_times, dynamicFields, ...rest } = t;
+                        tripsData.push({ ...rest, ...flattenDynamicFields(t) });
+                        stop_times.forEach(st => {
+                            stopTimesData.push({ trip_id: t.trip_id, arrival_time: st.arrival_time, departure_time: st.departure_time, stop_id: st.stop_id, stop_sequence: st.stop_sequence });
+                        });
+                    });
+                    zip.file("trips.txt", window.Papa.unparse(tripsData));
+                    zip.file("stop_times.txt", window.Papa.unparse(stopTimesData));
+                } else { throw new Error("Missing required file: trips.txt."); }
+
+                // 6. calendar.txt
+                if (store.calendar.length > 0) {
+                    const calData = store.calendar.map(c => { const { _internal_id, ...rest } = c; return rest; });
+                    zip.file("calendar.txt", window.Papa.unparse(calData));
+                }
+
+                // 7. calendar_dates.txt
+                if (store.calendarDates.length > 0) { zip.file("calendar_dates.txt", window.Papa.unparse(store.calendarDates)); }
+
+                // 8. transfers.txt
+                if (store.transfers.length > 0) { zip.file("transfers.txt", window.Papa.unparse(store.transfers)); }
+
+                // 9. shapes.txt
+                if (store.shapes.length > 0) {
+                    const shapesData = store.shapes.map(s => { return { shape_id: s.shape_id, shape_pt_lat: s.shape_pt_lat, shape_pt_lon: s.shape_pt_lon, shape_pt_sequence: s.shape_pt_sequence }; });
+                    zip.file("shapes.txt", window.Papa.unparse(shapesData));
+                }
+
+                exportMessage.value = 'Zipping files...';
+                const content = await zip.generateAsync({ type: "blob" });
+                const url = URL.createObjectURL(content);
+                const a = document.createElement("a");
+                a.href = url; a.download = "gtfs.zip"; document.body.appendChild(a); a.click();
+                setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+
+                exportMessage.value = 'gtfs.zip successfully generated and downloaded!';
+            } catch (error) {
+                exportError.value = true;
+                exportMessage.value = `Export failed: ${error.message}`;
+            } finally {
+                isExporting.value = false;
+            }
+        };
+
         // --- MAP LOGIC ---
         const initMap = (containerId) => {
             map = new maplibregl.Map({ container: containerId, style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', center: [15.6792, 48.5448], zoom: 12 });
@@ -425,7 +536,8 @@ const app = createApp({
             startCreateCalendar, openCalendar, saveCalendar, deleteCalendar, addException,
             openTripManager, getTripsForRouteAndDir, generateTrip, generateBatchTrips, 
             openTripEdit, saveTripEdit, deleteTrip, getAvailableTripAttributes, triggerTripField, moveStopTime, addStopToTrip,
-            getTripsForRoute, getStopsForTrip, addTransfer, generateShapesForRoute, deleteShape, isRouteShapesComplete
+            getTripsForRoute, getStopsForTrip, addTransfer, generateShapesForRoute, deleteShape, isRouteShapesComplete,
+            isExporting, exportMessage, exportError, exportGTFS
         };
     }
 });
